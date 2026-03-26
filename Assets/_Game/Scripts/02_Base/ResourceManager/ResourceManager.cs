@@ -51,8 +51,8 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
         = new Dictionary<string, BundleInfo>();
 
     /// <summary>正在进行的异步加载操作</summary>
-    private readonly Dictionary<string, LoadOperation<Object>> _activeAsyncOperations
-        = new Dictionary<string, LoadOperation<Object>>();
+    private readonly Dictionary<string, object> _activeAsyncOperations
+        = new Dictionary<string, object>();
 
     /// <summary>正在进行的Bundle加载操作</summary>
     private readonly Dictionary<string, BundleLoadOperation> _activeBundleOperations
@@ -92,7 +92,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
         Log("[ResourceManager] 初始化完成");
     }
 
-    private void OnDestroy()
+    protected override void OnDestroy()
     {
         // 清理所有正在进行的操作
         CleanupAllOperations();
@@ -102,6 +102,8 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
 
         // 清空缓存
         _resourceCache?.Clear();
+
+        base.OnDestroy();
     }
 
     // ══════════════════════════════════════════════════════
@@ -156,7 +158,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// <summary>
     /// 同步加载资源（Resources.Load包装）
     /// </summary>
-    public T Load<T>(string path) where T : Object
+    public T Load<T>(string path) where T : UnityEngine.Object
     {
         ValidatePath(path);
         string requestId = GenerateRequestId();
@@ -210,7 +212,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// <summary>
     /// 异步加载资源
     /// </summary>
-    public LoadOperation<T> LoadAsync<T>(string path) where T : Object
+    public LoadOperation<T> LoadAsync<T>(string path) where T : UnityEngine.Object
     {
         ValidatePath(path);
         string requestId = GenerateRequestId();
@@ -226,28 +228,31 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
         if (_resourceCache.TryGet<T>(path, out var cachedResource))
         {
             Log($"[ResourceManager] 异步加载缓存命中: {path}");
-            var cachedOp = new LoadOperation<T>(path, requestId)
-            {
-                Result = cachedResource,
-                IsDone = true,
-                Progress = 1f,
-                FromCache = true
-            };
-
             PublishLoadCompleted(path, true, requestId);
-            return cachedOp;
+            return LoadOperation<T>.CreateCompleted(path, cachedResource);
         }
 
-        // 创建新的异步加载操作
+        // 创建新的异步加载操作（AsyncLoadOperation在构造时自动开始加载）
         Log($"[ResourceManager] 开始异步加载: {path}");
-        var operation = new AsyncLoadOperation<T>(path, requestId);
+        PublishLoadStarted(path, LoadType.Async, requestId);
+        var operation = new AsyncLoadOperation<T>(path, requestId, this);
         _activeAsyncOperations[path] = operation;
 
-        // 发布加载开始事件
-        PublishLoadStarted(path, LoadType.Async, requestId);
-
-        // 启动协程处理异步加载
-        StartCoroutine(ProcessAsyncLoad<T>(operation));
+        // 通过事件回调处理缓存和清理，避免重复发起Resources.LoadAsync
+        operation.OnSucceeded += resource =>
+        {
+            _resourceCache.Cache(path, resource);
+            _activeAsyncOperations.Remove(path);
+            PublishLoadCompleted(path, false, requestId);
+            Log($"[ResourceManager] 异步加载完成: {path}");
+        };
+        operation.OnFailed += error =>
+        {
+            _activeAsyncOperations.Remove(path);
+            var errorType = error is ResourceLoadException rle ? rle.ErrorType : LoadErrorType.Unknown;
+            PublishLoadFailed(path, errorType, error.Message, requestId);
+            LogError($"[ResourceManager] 异步加载失败: {path} - {error.Message}");
+        };
 
         return operation;
     }
@@ -255,7 +260,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// <summary>
     /// 预加载资源到缓存（不立即使用）
     /// </summary>
-    public void Preload<T>(string path, int priority = 50) where T : Object
+    public void Preload<T>(string path, int priority = 50) where T : UnityEngine.Object
     {
         ValidatePath(path);
 
@@ -326,76 +331,12 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     // 异步加载协程处理
     // ══════════════════════════════════════════════════════
 
-    /// <summary>
-    /// 处理异步加载的协程
-    /// </summary>
-    private IEnumerator ProcessAsyncLoad<T>(AsyncLoadOperation<T> operation) where T : Object
-    {
-        string path = operation.ResourcePath;
-        string requestId = operation.RequestId;
-
-        try
-        {
-            // 启动Unity的异步加载
-            var resourceRequest = Resources.LoadAsync<T>(path);
-
-            // 等待加载完成，同时更新进度
-            while (!resourceRequest.isDone)
-            {
-                operation.Progress = resourceRequest.progress;
-                PublishLoadProgress(path, resourceRequest.progress, requestId);
-                yield return null;
-            }
-
-            // 检查结果
-            T resource = resourceRequest.asset as T;
-            if (resource == null)
-            {
-                throw new ResourceLoadException(
-                    LoadErrorType.NotFound,
-                    $"资源不存在或类型不匹配: {path}",
-                    path
-                );
-            }
-
-            // 添加到缓存
-            _resourceCache.Cache(path, resource);
-
-            // 更新操作状态
-            operation.Result = resource;
-            operation.IsDone = true;
-            operation.Progress = 1f;
-
-            // 清理活动操作记录
-            _activeAsyncOperations.Remove(path);
-
-            // 发布完成事件
-            PublishLoadCompleted(path, false, requestId);
-
-            Log($"[ResourceManager] 异步加载完成: {path}");
-        }
-        catch (Exception ex)
-        {
-            // 处理错误
-            operation.Error = ex.Message;
-            operation.IsDone = true;
-
-            // 清理活动操作记录
-            _activeAsyncOperations.Remove(path);
-
-            // 发布失败事件
-            var errorType = ex is ResourceLoadException rle ?
-                rle.ErrorType : LoadErrorType.Unknown;
-            PublishLoadFailed(path, errorType, ex.Message, requestId);
-
-            LogError($"[ResourceManager] 异步加载失败: {path} - {ex.Message}");
-        }
-    }
+    // ProcessAsyncLoad已移除：AsyncLoadOperation在构造时自动启动加载，通过OnSucceeded/OnFailed事件回调处理结果
 
     /// <summary>
     /// 预加载协程
     /// </summary>
-    private IEnumerator PreloadCoroutine<T>(string path, int priority) where T : Object
+    private IEnumerator PreloadCoroutine<T>(string path, int priority) where T : UnityEngine.Object
     {
         // 低优先级预加载 - 每帧等待
         if (priority < 50)
@@ -504,13 +445,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
         if (_loadedBundles.TryGetValue(bundleName, out var loadedBundle))
         {
             Log($"[ResourceManager] Bundle异步加载缓存命中: {bundleName}");
-            var cachedOp = new BundleLoadOperation(bundlePath, requestId)
-            {
-                Result = loadedBundle,
-                IsDone = true,
-                Progress = 1f
-            };
-            return cachedOp;
+            return LoadOperation<AssetBundle>.CreateCompleted(bundlePath, loadedBundle);
         }
 
         // 创建新的Bundle加载操作
@@ -532,98 +467,62 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// </summary>
     private IEnumerator ProcessBundleLoadAsync(string bundlePath, string bundleName, uint crc, BundleLoadOperation operation)
     {
-        string requestId = operation.RequestId;
+        AssetBundle bundle = null;
+        Exception loadError = null;
+        bool isRemote = IsRemotePath(bundlePath);
 
-        try
+        if (isRemote)
         {
-            AssetBundleCreateRequest bundleRequest;
+            var webRequest = UnityWebRequestAssetBundle.GetAssetBundle(bundlePath, crc);
+            operation.DownloadSize = 0;
+            operation.DownloadedBytes = 0;
+            webRequest.SendWebRequest();
 
-            if (IsRemotePath(bundlePath))
+            while (!webRequest.isDone)
             {
-                // 远程Bundle - 使用UnityWebRequestAssetBundle
-                var webRequest = UnityWebRequestAssetBundle.GetAssetBundle(bundlePath, crc);
-                operation.DownloadSize = 0; // 实际需要从header获取
-                operation.DownloadedBytes = 0;
-
-                // 发送请求
-                webRequest.SendWebRequest();
-
-                // 等待下载完成，同时更新进度
-                while (!webRequest.isDone)
-                {
-                    operation.Progress = webRequest.downloadProgress;
-                    operation.DownloadedBytes = (long)webRequest.downloadedBytes;
-                    yield return null;
-                }
-
-                // 检查错误
-                if (webRequest.result != UnityWebRequest.Result.Success)
-                {
-                    throw new ResourceLoadException(
-                        LoadErrorType.NetworkError,
-                        $"远程Bundle下载失败: {webRequest.error}",
-                        bundlePath
-                    );
-                }
-
-                // 从WebRequest获取AssetBundle
-                bundleRequest = DownloadHandlerAssetBundle.GetContent(webRequest);
+                operation.SetProgress(webRequest.downloadProgress);
+                operation.DownloadedBytes = (long)webRequest.downloadedBytes;
+                yield return null;
             }
+
+            if (webRequest.result != UnityWebRequest.Result.Success)
+                loadError = new ResourceLoadException(LoadErrorType.NetworkError, $"远程Bundle下载失败: {webRequest.error}", bundlePath);
             else
-            {
-                // 本地Bundle - 使用LoadFromFileAsync
-                bundleRequest = AssetBundle.LoadFromFileAsync(bundlePath, crc);
-
-                // 等待加载完成，同时更新进度
-                while (!bundleRequest.isDone)
-                {
-                    operation.Progress = bundleRequest.progress;
-                    yield return null;
-                }
-            }
-
-            // 获取Bundle
-            AssetBundle bundle = bundleRequest.assetBundle;
-            if (bundle == null)
-            {
-                throw new ResourceLoadException(
-                    LoadErrorType.NotFound,
-                    $"AssetBundle不存在或加载失败: {bundlePath}",
-                    bundlePath
-                );
-            }
-
-            // 记录已加载的Bundle
-            _loadedBundles[bundleName] = bundle;
-            UpdateBundleInfo(bundleName, bundlePath, bundle, isRemote: IsRemotePath(bundlePath));
-
-            // 更新操作状态
-            operation.Result = bundle;
-            operation.IsDone = true;
-            operation.Progress = 1f;
-
-            // 清理活动操作记录
-            _activeBundleOperations.Remove(bundleName);
-
-            Log($"[ResourceManager] Bundle异步加载完成: {bundleName}");
+                bundle = DownloadHandlerAssetBundle.GetContent(webRequest);
         }
-        catch (Exception ex)
+        else
         {
-            // 处理错误
-            operation.Error = ex.Message;
-            operation.IsDone = true;
-
-            // 清理活动操作记录
-            _activeBundleOperations.Remove(bundleName);
-
-            LogError($"[ResourceManager] Bundle异步加载失败: {bundlePath} - {ex.Message}");
+            var bundleRequest = AssetBundle.LoadFromFileAsync(bundlePath, crc);
+            while (!bundleRequest.isDone)
+            {
+                operation.SetProgress(bundleRequest.progress);
+                yield return null;
+            }
+            bundle = bundleRequest.assetBundle;
         }
+
+        if (loadError == null && bundle == null)
+            loadError = new ResourceLoadException(LoadErrorType.NotFound, $"AssetBundle不存在或加载失败: {bundlePath}", bundlePath);
+
+        _activeBundleOperations.Remove(bundleName);
+
+        if (loadError != null)
+        {
+            operation.NotifyFailure(loadError);
+            LogError($"[ResourceManager] Bundle异步加载失败: {bundlePath} - {loadError.Message}");
+            yield break;
+        }
+
+        _loadedBundles[bundleName] = bundle;
+        UpdateBundleInfo(bundleName, bundlePath, bundle, isRemote: isRemote);
+        operation.NotifySuccess(bundle);
+        Log($"[ResourceManager] Bundle异步加载完成: {bundleName}");
     }
 
     /// <summary>
     /// 从已加载的Bundle中加载资源
     /// </summary>
-    public T LoadFromBundle<T>(string bundleName, string assetPath) where T : Object
+    public T LoadFromBundle<T>(string bundleName, string assetPath) where T : UnityEngine.Object
     {
         ValidateBundleName(bundleName);
         ValidateAssetPath(assetPath);
@@ -662,7 +561,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// <summary>
     /// 异步从Bundle中加载资源
     /// </summary>
-    public LoadOperation<T> LoadFromBundleAsync<T>(string bundleName, string assetPath) where T : Object
+    public LoadOperation<T> LoadFromBundleAsync<T>(string bundleName, string assetPath) where T : UnityEngine.Object
     {
         ValidateBundleName(bundleName);
         ValidateAssetPath(assetPath);
@@ -679,16 +578,12 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
 
         if (!_loadedBundles.TryGetValue(bundleName, out var bundle))
         {
-            var errorOp = new LoadOperation<T>(assetPath, requestId)
-            {
-                Error = $"Bundle未加载: {bundleName}",
-                IsDone = true
-            };
-            return errorOp;
+            return LoadOperation<T>.CreateFailed(assetPath,
+                new ResourceLoadException(LoadErrorType.NotFound, $"Bundle未加载: {bundleName}", bundleName));
         }
 
-        // 创建异步加载操作
-        var operation = new AsyncLoadOperation<T>(assetPath, requestId);
+        // 创建待驱动的操作
+        var operation = LoadOperation<T>.CreatePending(assetPath, requestId);
         _activeAsyncOperations[operationKey] = operation;
 
         // 启动协程
@@ -829,50 +724,28 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// <summary>
     /// 处理从Bundle中异步加载资源的协程
     /// </summary>
-    private IEnumerator ProcessBundleAssetLoadAsync<T>(AssetBundle bundle, string assetPath, string operationKey, AsyncLoadOperation<T> operation) where T : Object
+    private IEnumerator ProcessBundleAssetLoadAsync<T>(AssetBundle bundle, string assetPath, string operationKey, LoadOperation<T> operation) where T : UnityEngine.Object
     {
-        try
+        var assetRequest = bundle.LoadAssetAsync<T>(assetPath);
+
+        while (!assetRequest.isDone)
         {
-            var assetRequest = bundle.LoadAssetAsync<T>(assetPath);
-
-            // 等待加载完成，同时更新进度
-            while (!assetRequest.isDone)
-            {
-                operation.Progress = assetRequest.progress;
-                yield return null;
-            }
-
-            // 获取资源
-            T asset = assetRequest.asset as T;
-            if (asset == null)
-            {
-                throw new ResourceLoadException(
-                    LoadErrorType.NotFound,
-                    $"Bundle资源不存在或类型不匹配: {assetPath}",
-                    assetPath
-                );
-            }
-
-            // 更新操作状态
-            operation.Result = asset;
-            operation.IsDone = true;
-            operation.Progress = 1f;
-
-            // 清理活动操作记录
-            _activeAsyncOperations.Remove(operationKey);
-
-            Log($"[ResourceManager] Bundle资源异步加载完成: {assetPath}");
+            operation.SetProgress(assetRequest.progress);
+            yield return null;
         }
-        catch (Exception ex)
+
+        _activeAsyncOperations.Remove(operationKey);
+
+        T asset = assetRequest.asset as T;
+        if (asset == null)
         {
-            // 处理错误
-            operation.Error = ex.Message;
-            operation.IsDone = true;
-
-            // 清理活动操作记录
-            _activeAsyncOperations.Remove(operationKey);
-
-            LogError($"[ResourceManager] Bundle资源异步加载失败: {assetPath} - {ex.Message}");
+            operation.NotifyFailure(new ResourceLoadException(LoadErrorType.NotFound, $"Bundle资源不存在或类型不匹配: {assetPath}", assetPath));
+            LogError($"[ResourceManager] Bundle资源异步加载失败: {assetPath}");
+        }
+        else
+        {
+            operation.NotifySuccess(asset);
+            Log($"[ResourceManager] Bundle资源异步加载完成: {assetPath}");
         }
     }
 
@@ -881,74 +754,46 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// </summary>
     private IEnumerator ProcessBundleDownload(string remoteUrl, string localBundleName, string expectedHash, DownloadOperation operation)
     {
-        try
+        string localPath = operation.LocalPath;
+
+        string cacheDir = System.IO.Path.GetDirectoryName(localPath);
+        if (!System.IO.Directory.Exists(cacheDir))
+            System.IO.Directory.CreateDirectory(cacheDir);
+
+        var webRequest = UnityWebRequest.Get(remoteUrl);
+        webRequest.downloadHandler = new DownloadHandlerFile(localPath);
+        webRequest.SendWebRequest();
+
+        while (!webRequest.isDone)
         {
-            string localPath = operation.LocalPath;
-
-            // 创建缓存目录
-            string cacheDir = System.IO.Path.GetDirectoryName(localPath);
-            if (!System.IO.Directory.Exists(cacheDir))
-                System.IO.Directory.CreateDirectory(cacheDir);
-
-            // 创建UnityWebRequest
-            var webRequest = UnityWebRequest.Get(remoteUrl);
-            webRequest.downloadHandler = new DownloadHandlerFile(localPath);
-
-            // 获取文件大小（如果需要）
-            webRequest.SendWebRequest();
-
-            // 等待下载完成，同时更新进度
-            while (!webRequest.isDone)
-            {
-                operation.Progress = webRequest.downloadProgress;
-                operation.DownloadedBytes = (long)webRequest.downloadedBytes;
-                yield return null;
-            }
-
-            // 检查错误
-            if (webRequest.result != UnityWebRequest.Result.Success)
-            {
-                throw new ResourceLoadException(
-                    LoadErrorType.NetworkError,
-                    $"Bundle下载失败: {webRequest.error}",
-                    remoteUrl
-                );
-            }
-
-            // 验证哈希（如果提供）
-            if (!string.IsNullOrEmpty(expectedHash))
-            {
-                string actualHash = GetFileHash(localPath);
-                if (actualHash != expectedHash)
-                {
-                    // 删除损坏的文件
-                    if (System.IO.File.Exists(localPath))
-                        System.IO.File.Delete(localPath);
-
-                    throw new ResourceLoadException(
-                        LoadErrorType.ParseError,
-                        $"Bundle哈希验证失败: expected {expectedHash}, got {actualHash}",
-                        remoteUrl
-                    );
-                }
-            }
-
-            // 更新操作状态
-            operation.Result = localPath;
-            operation.IsDone = true;
-            operation.Progress = 1f;
-            operation.TotalBytes = (long)webRequest.downloadedBytes;
-
-            Log($"[ResourceManager] Bundle下载完成: {localBundleName} ({operation.TotalBytes}字节)");
+            operation.SetProgress(webRequest.downloadProgress);
+            operation.DownloadedBytes = (long)webRequest.downloadedBytes;
+            yield return null;
         }
-        catch (Exception ex)
+
+        if (webRequest.result != UnityWebRequest.Result.Success)
         {
-            // 处理错误
-            operation.Error = ex.Message;
-            operation.IsDone = true;
-
-            LogError($"[ResourceManager] Bundle下载失败: {remoteUrl} - {ex.Message}");
+            operation.NotifyFailure(new ResourceLoadException(LoadErrorType.NetworkError, $"Bundle下载失败: {webRequest.error}", remoteUrl));
+            LogError($"[ResourceManager] Bundle下载失败: {remoteUrl} - {webRequest.error}");
+            yield break;
         }
+
+        if (!string.IsNullOrEmpty(expectedHash))
+        {
+            string actualHash = GetFileHash(localPath);
+            if (actualHash != expectedHash)
+            {
+                if (System.IO.File.Exists(localPath))
+                    System.IO.File.Delete(localPath);
+                operation.NotifyFailure(new ResourceLoadException(LoadErrorType.ParseError, $"Bundle哈希验证失败: expected {expectedHash}, got {actualHash}", remoteUrl));
+                LogError($"[ResourceManager] Bundle哈希验证失败: {localBundleName}");
+                yield break;
+            }
+        }
+
+        operation.TotalBytes = (long)webRequest.downloadedBytes;
+        operation.NotifySuccess(localPath);
+        Log($"[ResourceManager] Bundle下载完成: {localBundleName} ({operation.TotalBytes}字节)");
     }
 
     // ══════════════════════════════════════════════════════
@@ -1168,7 +1013,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
             Size = 0, // 实际需要获取文件大小
             Hash = string.Empty,
             AssetCount = bundle.GetAllAssetNames().Length,
-            Dependencies = bundle.GetAllDependencies()
+            Dependencies = Array.Empty<string>()
         };
 
         _bundleInfos[bundleName] = info;
@@ -1183,11 +1028,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// </summary>
     private void CleanupAllOperations()
     {
-        // 清理异步资源加载操作
-        foreach (var operation in _activeAsyncOperations.Values)
-        {
-            operation.Cancel();
-        }
+        // 清理异步资源加载操作（AsyncLoadOperation自管理，清空记录即可）
         _activeAsyncOperations.Clear();
 
         // 清理Bundle加载操作
@@ -1263,7 +1104,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// <param name="paths">资源路径数组</param>
     /// <param name="batchId">批次ID，null则自动生成</param>
     /// <returns>批量加载操作</returns>
-    public BatchLoadOperation BatchLoad<T>(string[] paths, string batchId = null) where T : Object
+    public BatchLoadOperation BatchLoad<T>(string[] paths, string batchId = null) where T : UnityEngine.Object
     {
         if (paths == null || paths.Length == 0)
             throw new ArgumentException("资源路径数组不能为空", nameof(paths));
@@ -1289,7 +1130,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// <summary>
     /// 处理批量加载的协程
     /// </summary>
-    private IEnumerator ProcessBatchLoad<T>(string[] paths, BatchLoadOperation operation) where T : Object
+    private IEnumerator ProcessBatchLoad<T>(string[] paths, BatchLoadOperation operation) where T : UnityEngine.Object
     {
         int completedCount = 0;
         int failedCount = 0;
@@ -1298,53 +1139,43 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
         {
             string path = paths[i];
 
-            try
+            // 尝试缓存命中（同步）
+            if (_resourceCache.TryGet<T>(path, out var cachedResource))
             {
-                // 尝试同步加载（如果缓存命中）
-                if (_resourceCache.TryGet<T>(path, out var cachedResource))
+                operation.Results[path] = cachedResource;
+                completedCount++;
+            }
+            else
+            {
+                // 异步加载（yield在try-catch外）
+                var asyncOp = LoadAsync<T>(path);
+                yield return asyncOp;
+
+                if (asyncOp.IsSuccessful)
                 {
-                    operation.Results[path] = cachedResource;
+                    operation.Results[path] = asyncOp.Result;
                     completedCount++;
                 }
                 else
                 {
-                    // 异步加载
-                    var asyncOp = LoadAsync<T>(path);
-                    yield return asyncOp;
-
-                    if (asyncOp.IsSuccessful)
-                    {
-                        operation.Results[path] = asyncOp.Result;
-                        completedCount++;
-                    }
-                    else
-                    {
-                        operation.Errors[path] = asyncOp.Error;
-                        failedCount++;
-                    }
+                    operation.Errors[path] = asyncOp.Error?.Message ?? "Unknown error";
+                    failedCount++;
                 }
-
-                // 更新进度
-                operation.Progress = (float)(completedCount + failedCount) / paths.Length;
-
-                // 发布批量加载进度事件
-                EventBus.Publish(new BatchLoadProgressEvent
-                {
-                    BatchId = operation.BatchId,
-                    CompletedItems = completedCount + failedCount,
-                    TotalItems = paths.Length,
-                    Progress = operation.Progress
-                });
-
-                // 每加载几个资源让出一帧，避免卡顿
-                if (i % 5 == 0)
-                    yield return null;
             }
-            catch (Exception ex)
+
+            // 更新进度
+            operation.Progress = (float)(completedCount + failedCount) / paths.Length;
+
+            EventBus.Publish(new BatchLoadProgressEvent
             {
-                operation.Errors[path] = ex.Message;
-                failedCount++;
-            }
+                BatchId = operation.BatchId,
+                CompletedItems = completedCount + failedCount,
+                TotalItems = paths.Length,
+                Progress = operation.Progress
+            });
+
+            if (i % 5 == 0)
+                yield return null;
         }
 
         // 完成批量加载
@@ -1369,13 +1200,13 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
         public string BatchId { get; private set; }
         public bool IsDone { get; set; }
         public float Progress { get; set; }
-        public Dictionary<string, Object> Results { get; private set; }
+        public Dictionary<string, UnityEngine.Object> Results { get; private set; }
         public Dictionary<string, string> Errors { get; private set; }
 
         public BatchLoadOperation(string batchId, int totalItems)
         {
             BatchId = batchId;
-            Results = new Dictionary<string, Object>(totalItems);
+            Results = new Dictionary<string, UnityEngine.Object>(totalItems);
             Errors = new Dictionary<string, string>();
         }
     }
@@ -1408,7 +1239,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
         if (Time.frameCount % 300 == 0) // 每5秒（假设60FPS）
         {
             long totalMemory = System.GC.GetTotalMemory(false);
-            if (totalMemory > _cacheConfig?.MemoryWarningThresholdBytes)
+            if (_cacheConfig != null && totalMemory > (long)_cacheConfig.MemoryWarningThresholdMB * 1024 * 1024)
             {
                 // 自动清理
                 ClearCache();

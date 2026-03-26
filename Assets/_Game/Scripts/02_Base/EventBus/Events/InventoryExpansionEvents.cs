@@ -167,10 +167,105 @@ public struct InventoryExpansionUnlockedEvent : IEvent
 /// <summary>扩展配置加载完成</summary>
 public struct InventoryExpansionConfigsLoadedEvent : IEvent
 {
-    public int TotalConfigs;                // 总配置数
-    public int AvailableConfigs;            // 可用配置数（条件满足）
-    public int CompletedConfigs;            // 已完成配置数
-    public string[] AvailableExpansionIds;  // 可用的扩展ID列表
+    public int TotalConfigs;
+    public int AvailableConfigs;
+    public int CompletedConfigs;
+    public string[] AvailableExpansionIds;
+}
+
+// ── 效果服务事件（从 DefaultExpansionEffectService.cs 移至此处）──
+
+/// <summary>效果应用开始</summary>
+public struct ExpansionEffectApplicationStartedEvent : IEvent
+{
+    public string ExpansionId;
+    public string ContainerId;
+    public System.DateTime StartTime;
+    public SurvivalGame.Data.Inventory.Expansion.ExpansionType EffectType;
+}
+
+/// <summary>效果应用结果</summary>
+public struct ExpansionEffectAppliedEvent : IEvent
+{
+    public string ExpansionId;
+    public string ContainerId;
+    public bool Success;
+    public SurvivalGame.Data.Inventory.Expansion.ExpansionType EffectType;
+    public System.DateTime ApplicationTime;
+    public string FailureReason;
+}
+
+/// <summary>效果回滚开始</summary>
+public struct ExpansionEffectRollbackStartedEvent : IEvent
+{
+    public string ExpansionId;
+    public string ContainerId;
+    public System.DateTime RollbackTime;
+}
+
+/// <summary>效果回滚完成</summary>
+public struct ExpansionEffectRollbackCompletedEvent : IEvent
+{
+    public string ExpansionId;
+    public string ContainerId;
+    public bool Success;
+    public System.DateTime RollbackTime;
+    public string FailureReason;
+}
+
+// ── 消耗服务事件（从 DefaultExpansionConsumptionService.cs 移至此处）──
+
+/// <summary>条件消耗事件</summary>
+public struct ExpansionConditionConsumedEvent : IEvent
+{
+    public string ConditionId;
+    public SurvivalGame.Data.Inventory.Expansion.ExpansionConditionType ConditionType;
+    public bool Success;
+    public System.DateTime Timestamp;
+}
+
+/// <summary>条件消耗失败事件</summary>
+public struct ExpansionConditionConsumptionFailedEvent : IEvent
+{
+    public string ConditionId;
+    public SurvivalGame.Data.Inventory.Expansion.ExpansionConditionType ConditionType;
+    public string FailureReason;
+    public System.DateTime Timestamp;
+}
+
+/// <summary>批量消耗开始</summary>
+public struct ExpansionBatchConsumptionStartedEvent : IEvent
+{
+    public string ExpansionId;
+    public int TotalConditions;
+    public bool BatchMode;
+}
+
+/// <summary>批量消耗完成</summary>
+public struct ExpansionBatchConsumptionCompletedEvent : IEvent
+{
+    public string ExpansionId;
+    public int TotalConditions;
+    public int SucceededConditions;
+    public int FailedConditions;
+    public bool BatchMode;
+    public float AverageQueueTime;
+}
+
+/// <summary>消耗回滚事件</summary>
+public struct ExpansionConsumptionRollbackEvent : IEvent
+{
+    public string ConditionId;
+    public SurvivalGame.Data.Inventory.Expansion.ExpansionConditionType ConditionType;
+    public SurvivalGame.Data.Inventory.Expansion.ExpansionConsumptionResult OriginalResult;
+    public System.DateTime RollbackTime;
+}
+
+/// <summary>消耗队列清空事件</summary>
+public struct ExpansionConsumptionQueueClearedEvent : IEvent
+{
+    public int ClearedCount;
+    public System.DateTime Timestamp;
 }
 
 /// <summary>扩展状态枚举</summary>

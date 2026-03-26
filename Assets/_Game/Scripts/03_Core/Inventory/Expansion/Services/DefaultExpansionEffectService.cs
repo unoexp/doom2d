@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using SurvivalGame.Data.Inventory.Expansion;
+using ExpansionEffect = SurvivalGame.Data.Inventory.Expansion.ExpansionEffect;
+using InventoryContainer = SurvivalGame.Data.Inventory.InventoryContainer;
 
 namespace SurvivalGame.Core.Inventory.Expansion
 {
@@ -267,25 +269,32 @@ namespace SurvivalGame.Core.Inventory.Expansion
                 return false;
 
             string containerId = GetTargetContainerId(expansionDefinition);
-            var container = GetContainerById(containerId);
 
-            if (container == null)
+            bool success;
+            int oldCapacity;
+
+            if (containerId == _inventorySystem.MainInventory.ContainerId)
+            {
+                oldCapacity = _inventorySystem.MainInventory.Capacity;
+                success = _inventorySystem.ExpandMainInventory(effect.AdditionalSlots);
+                if (success)
+                    LogSuccess($"容器 {containerId} 容量从 {oldCapacity} 扩展到 {_inventorySystem.MainInventory.Capacity}");
+            }
+            else if (containerId == _inventorySystem.QuickAccess.ContainerId)
+            {
+                oldCapacity = _inventorySystem.QuickAccess.Capacity;
+                success = _inventorySystem.ExpandQuickAccess(effect.AdditionalSlots);
+                if (success)
+                    LogSuccess($"容器 {containerId} 容量从 {oldCapacity} 扩展到 {_inventorySystem.QuickAccess.Capacity}");
+            }
+            else
             {
                 LogError($"容器不存在: {containerId}");
                 return false;
             }
 
-            int oldCapacity = container.Capacity;
-            bool success = container.ExpandCapacity(effect.AdditionalSlots);
-
-            if (success)
-            {
-                LogSuccess($"容器 {containerId} 容量从 {oldCapacity} 扩展到 {container.Capacity}");
-            }
-            else
-            {
+            if (!success)
                 LogError($"容器 {containerId} 容量扩展失败");
-            }
 
             return success;
         }
@@ -342,19 +351,17 @@ namespace SurvivalGame.Core.Inventory.Expansion
                 return false;
 
             string containerId = GetTargetContainerId(expansionDefinition);
-            var container = GetContainerById(containerId);
+            bool containerExists = containerId == _inventorySystem.MainInventory.ContainerId
+                                || containerId == _inventorySystem.QuickAccess.ContainerId;
 
-            if (container == null)
+            if (!containerExists)
             {
                 LogError($"容器不存在: {containerId}");
                 return false;
             }
 
-            // 尝试缩减容量（注意：如果容器中有物品，可能无法缩减）
             // TODO: 实现安全的容量缩减逻辑
             LogWarning($"容量增加效果的回滚尚未完全实现: {expansionDefinition.ExpansionId}");
-
-            // 暂时只记录日志，不实际回滚
             return true;
         }
 
@@ -366,13 +373,13 @@ namespace SurvivalGame.Core.Inventory.Expansion
                     return $"增加 {effect.AdditionalSlots} 个槽位";
 
                 case ExpansionType.WeightLimitIncrease:
-                    return $"增加重量限制 {effect.WeightLimitIncrease} kg";
+                    return $"增加重量限制 {effect.AdditionalWeightLimit} kg";
 
                 case ExpansionType.SlotTypeUpgrade:
-                    return $"升级槽位类型: {effect.SlotType}";
+                    return $"升级槽位类型: {effect.TargetSlotType} → {effect.UpgradeSlotType}";
 
                 case ExpansionType.SpecialSlotAddition:
-                    return $"添加特殊槽位: {effect.SpecialSlotType}";
+                    return $"添加特殊槽位: {effect.SpecialSlotType} x{effect.SpecialSlotCount}";
 
                 default:
                     return $"未知效果: {effect.EffectType}";
@@ -415,21 +422,21 @@ namespace SurvivalGame.Core.Inventory.Expansion
             // 使用反射调用私有方法，或者复制逻辑
             // 简化实现：根据扩展配置的目标容器返回容器ID
             if (expansionDefinition.TargetContainer == ExpansionTargetContainer.MainInventory)
-                return _inventorySystem.MainInventory?.ContainerId ?? "MainInventory";
+                return _inventorySystem.MainInventory.ContainerId ?? "MainInventory";
             else if (expansionDefinition.TargetContainer == ExpansionTargetContainer.QuickAccess)
-                return _inventorySystem.QuickAccess?.ContainerId ?? "QuickAccess";
+                return _inventorySystem.QuickAccess.ContainerId ?? "QuickAccess";
             else
                 return expansionDefinition.SpecificContainerId ?? "MainInventory";
         }
 
-        private InventoryContainer GetContainerById(string containerId)
+        private InventoryContainer? GetContainerById(string containerId)
         {
             if (_inventorySystem == null)
                 return null;
 
-            if (containerId == _inventorySystem.MainInventory?.ContainerId)
+            if (containerId == _inventorySystem.MainInventory.ContainerId)
                 return _inventorySystem.MainInventory;
-            else if (containerId == _inventorySystem.QuickAccess?.ContainerId)
+            else if (containerId == _inventorySystem.QuickAccess.ContainerId)
                 return _inventorySystem.QuickAccess;
             else
                 return null;
@@ -489,43 +496,7 @@ namespace SurvivalGame.Core.Inventory.Expansion
         }
     }
 
-    // ============ 相关事件定义 ============
-
-    /// <summary>效果应用开始事件</summary>
-    public struct ExpansionEffectApplicationStartedEvent : IEvent
-    {
-        public string ExpansionId;
-        public string ContainerId;
-        public DateTime StartTime;
-        public ExpansionType EffectType;
-    }
-
-    /// <summary>效果应用事件</summary>
-    public struct ExpansionEffectAppliedEvent : IEvent
-    {
-        public string ExpansionId;
-        public string ContainerId;
-        public bool Success;
-        public ExpansionType EffectType;
-        public DateTime ApplicationTime;
-        public string FailureReason;
-    }
-
-    /// <summary>效果回滚开始事件</summary>
-    public struct ExpansionEffectRollbackStartedEvent : IEvent
-    {
-        public string ExpansionId;
-        public string ContainerId;
-        public DateTime RollbackTime;
-    }
-
-    /// <summary>效果回滚完成事件</summary>
-    public struct ExpansionEffectRollbackCompletedEvent : IEvent
-    {
-        public string ExpansionId;
-        public string ContainerId;
-        public bool Success;
-        public DateTime RollbackTime;
-        public string FailureReason;
-    }
+    // 相关事件定义已移至：02_Base/EventBus/Events/InventoryExpansionEvents.cs
+    // ExpansionEffectApplicationStartedEvent / ExpansionEffectAppliedEvent /
+    // ExpansionEffectRollbackStartedEvent / ExpansionEffectRollbackCompletedEvent
 }

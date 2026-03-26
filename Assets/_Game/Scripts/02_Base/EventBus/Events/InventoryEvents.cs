@@ -131,3 +131,20 @@ public enum SortType
     ByType,
     ByRarity
 }
+
+// ── 玩家状态事件（从 05_Show 移至此处：业务域事件，低层将来可能发布）──
+
+/// <summary>玩家负重变化事件</summary>
+public struct PlayerWeightChangedEvent : IEvent
+{
+    public float CurrentWeight;
+    public float MaxWeight;
+    public bool IsOverweight;
+}
+
+/// <summary>玩家金币变化事件</summary>
+public struct PlayerGoldChangedEvent : IEvent
+{
+    public int CurrentGold;
+    public int Delta; // 正数为增加，负数为减少
+}

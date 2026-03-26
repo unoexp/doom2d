@@ -8,6 +8,7 @@ namespace SurvivalGame.Data.Inventory
     /// <summary>
     /// 物品堆叠数据，包含物品实例的运行时状态
     /// ⚠️ 设计为结构体以支持对象池和零GC分配
+    /// 🏗️ 纯数据：不持有任何资源加载逻辑，定义查询通过 IItemDataService 完成
     /// </summary>
     [Serializable]
     public struct ItemStack : IEquatable<ItemStack>
@@ -20,9 +21,6 @@ namespace SurvivalGame.Data.Inventory
         // ============ MOD扩展数据 ============
         [SerializeField] private string _customDataJson; // JSON字符串，用于MOD存储自定义数据
 
-        // ============ 运行时状态（不序列化） ============
-        [NonSerialized] private ItemDefinitionSO _cachedDefinition;
-
         public static readonly ItemStack Empty = new ItemStack();
 
         // ============ 构造函数 ============
@@ -32,7 +30,6 @@ namespace SurvivalGame.Data.Inventory
             _quantity = Mathf.Max(1, quantity);
             _durability = Mathf.Clamp01(durability);
             _customDataJson = string.Empty;
-            _cachedDefinition = null;
         }
 
         // ============ 属性访问器 ============
@@ -43,19 +40,7 @@ namespace SurvivalGame.Data.Inventory
 
         public bool IsEmpty => string.IsNullOrEmpty(_itemId) || _quantity <= 0;
 
-        /// <summary>获取物品定义，带缓存机制</summary>
-        public ItemDefinitionSO GetDefinition()
-        {
-            if (_cachedDefinition == null && !string.IsNullOrEmpty(_itemId))
-            {
-                // 通过Resources或Addressables加载
-                // TODO: 实现物品定义的加载逻辑
-                _cachedDefinition = Resources.Load<ItemDefinitionSO>($"Items/{_itemId}");
-            }
-            return _cachedDefinition;
-        }
-
-        // ============ 操作方法 ============
+        // ============ 操作方法（纯数据变换，无资源加载）============
         public ItemStack WithQuantity(int newQuantity)
         {
             return new ItemStack(_itemId, newQuantity, _durability)
@@ -84,7 +69,6 @@ namespace SurvivalGame.Data.Inventory
         public ItemStack ConsumeDurability(float amount)
         {
             if (amount <= 0 || _durability <= 0) return this;
-
             float newDurability = Mathf.Max(0f, _durability - amount);
             return WithDurability(newDurability);
         }
@@ -93,7 +77,6 @@ namespace SurvivalGame.Data.Inventory
         public ItemStack RepairDurability(float amount)
         {
             if (amount <= 0 || _durability >= 1.0f) return this;
-
             float newDurability = Mathf.Min(1.0f, _durability + amount);
             return WithDurability(newDurability);
         }
@@ -116,49 +99,43 @@ namespace SurvivalGame.Data.Inventory
             return _durability;
         }
 
-        /// <summary>获取当前耐久度数值（基于物品定义的最大耐久度）</summary>
-        public float GetCurrentDurabilityValue()
-        {
-            var definition = GetDefinition();
-            if (definition == null || !definition.HasDurability) return 0f;
+        // ============ 堆叠工具方法（调用方提供 maxStackSize）============
 
-            return _durability * definition.MaxDurability;
-        }
-
-        // ============ 工具方法 ============
-        public bool CanStackWith(ItemStack other)
+        /// <summary>
+        /// 检查是否可与另一个物品堆叠
+        /// 🏗️ maxStackSize 由调用方通过 IItemDataService 查询后传入，数据层不做资源加载
+        /// </summary>
+        public bool CanStackWith(ItemStack other, int maxStackSize)
         {
             if (IsEmpty || other.IsEmpty) return false;
             if (_itemId != other._itemId) return false;
             if (Math.Abs(_durability - other._durability) > 0.01f) return false;
             if (_customDataJson != other._customDataJson) return false;
 
-            var definition = GetDefinition();
-            if (definition == null) return false;
-
-            return _quantity + other._quantity <= definition.MaxStackSize;
+            return _quantity + other._quantity <= maxStackSize;
         }
 
-        public ItemStack MergeWith(ItemStack other, out ItemStack overflow)
+        /// <summary>
+        /// 与另一个物品合并堆叠
+        /// 🏗️ maxStackSize 由调用方通过 IItemDataService 查询后传入，数据层不做资源加载
+        /// </summary>
+        public ItemStack MergeWith(ItemStack other, int maxStackSize, out ItemStack overflow)
         {
             overflow = ItemStack.Empty;
-            if (!CanStackWith(other)) return this;
+            if (!CanStackWith(other, maxStackSize)) return this;
 
             var total = _quantity + other._quantity;
-            var definition = GetDefinition();
-            var maxStack = definition?.MaxStackSize ?? 1;
-
-            if (total <= maxStack)
+            if (total <= maxStackSize)
             {
                 return WithQuantity(total);
             }
             else
             {
-                overflow = new ItemStack(_itemId, total - maxStack, _durability)
+                overflow = new ItemStack(_itemId, total - maxStackSize, _durability)
                 {
                     _customDataJson = _customDataJson
                 };
-                return WithQuantity(maxStack);
+                return WithQuantity(maxStackSize);
             }
         }
 

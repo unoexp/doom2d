@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using SurvivalGame.Data.Inventory;
 
 /// <summary>
 /// 背包ViewModel，封装UI显示所需数据
@@ -22,8 +23,8 @@ public class InventoryViewModel
     private string _currentSortMethod = "Default";
 
     // 背包统计
-    private int _totalWeight = 0;
-    private int _maxWeight = 100;
+    private float _totalWeight = 0f;
+    private float _maxWeight = 100f;
     private int _goldAmount = 0;
 
     // 事件
@@ -32,7 +33,7 @@ public class InventoryViewModel
     public event Action<bool> OnInventoryVisibilityChanged;
     public event Action<string> OnFilterChanged;
     public event Action<string> OnSortChanged;
-    public event Action<int, int> OnWeightChanged;
+    public event Action<float, float> OnWeightChanged;
     public event Action<int> OnGoldChanged;
 
     // 动态槽位相关事件
@@ -43,8 +44,9 @@ public class InventoryViewModel
     public event Action<int> OnQuickSlotsRemoved;    // 移除了快捷栏槽位
 
     // 配置
+    public const int QUICK_SLOTS = 10; // 默认快捷栏槽位数，Presenter用于区分槽位类型
     public int TotalSlots => _slots.Count;
-    public int QuickSlots => _quickSlots.Count;
+    public int QuickSlotCount => _quickSlots.Count;
 
     // 动态槽位支持
     private int _initialSlots = 24; // 默认槽位
@@ -96,12 +98,12 @@ public class InventoryViewModel
         }
     }
 
-    public int TotalWeight
+    public float TotalWeight
     {
         get => _totalWeight;
         set
         {
-            if (_totalWeight != value)
+            if (Math.Abs(_totalWeight - value) > 0.001f)
             {
                 var oldValue = _totalWeight;
                 _totalWeight = value;
@@ -110,8 +112,8 @@ public class InventoryViewModel
         }
     }
 
-    public int MaxWeight => _maxWeight;
-    public float WeightPercentage => (float)_totalWeight / _maxWeight;
+    public float MaxWeight => _maxWeight;
+    public float WeightPercentage => _maxWeight > 0 ? _totalWeight / _maxWeight : 0f;
     public bool IsOverweight => _totalWeight > _maxWeight;
 
     public int GoldAmount
@@ -140,7 +142,7 @@ public class InventoryViewModel
         // 初始化主槽位
         for (int i = 0; i < _initialSlots; i++)
         {
-            _slots.Add(new SlotViewModel { SlotIndex = i, SlotType = SlotType.Inventory });
+            _slots.Add(new SlotViewModel { SlotIndex = i, SlotType = SlotType.General });
         }
 
         // 初始化快捷栏槽位
@@ -149,7 +151,7 @@ public class InventoryViewModel
             _quickSlots.Add(new SlotViewModel
             {
                 SlotIndex = i,
-                SlotType = SlotType.QuickSlot,
+                SlotType = SlotType.QuickAccess,
                 Keybind = (i + 1).ToString() // 快捷键1-0
             });
         }
@@ -178,12 +180,12 @@ public class InventoryViewModel
     /// <summary>清除槽位</summary>
     public void ClearSlot(int slotIndex, SlotType slotType)
     {
-        if (slotType == SlotType.Inventory && slotIndex >= 0 && slotIndex < _slots.Count)
+        if (slotType == SlotType.General && slotIndex >= 0 && slotIndex < _slots.Count)
         {
             _slots[slotIndex].Clear();
             OnSlotUpdated?.Invoke(slotIndex);
         }
-        else if (slotType == SlotType.QuickSlot && slotIndex >= 0 && slotIndex < _quickSlots.Count)
+        else if (slotType == SlotType.QuickAccess && slotIndex >= 0 && slotIndex < _quickSlots.Count)
         {
             _quickSlots[slotIndex].Clear();
             OnQuickSlotUpdated?.Invoke(slotIndex);
@@ -220,16 +222,29 @@ public class InventoryViewModel
     /// <summary>根据过滤条件获取槽位</summary>
     public List<SlotViewModel> GetFilteredSlots(string categoryFilter)
     {
-        if (categoryFilter == "All") return GetOccupiedSlots();
+        if (string.IsNullOrEmpty(categoryFilter) || categoryFilter == "All")
+            return GetOccupiedSlots();
+
+        var itemService = ServiceLocator.Get<IItemDataService>();
+        if (itemService == null)
+            return GetOccupiedSlots(); // 无数据服务时降级返回全部
 
         var filtered = new List<SlotViewModel>();
-        // 这里需要访问ItemDefinitionSO来获取分类信息
-        // 暂时返回所有槽位
-        return GetOccupiedSlots();
+        foreach (var slot in _slots)
+        {
+            if (slot.IsEmpty) continue;
+
+            var definition = itemService.GetItemDefinition(slot.ItemId);
+            if (definition != null && definition.Category.ToString() == categoryFilter)
+            {
+                filtered.Add(slot);
+            }
+        }
+        return filtered;
     }
 
     /// <summary>设置最大负重</summary>
-    public void SetMaxWeight(int maxWeight)
+    public void SetMaxWeight(float maxWeight)
     {
         _maxWeight = maxWeight;
         OnWeightChanged?.Invoke(_totalWeight, _totalWeight);
@@ -268,7 +283,7 @@ public class InventoryViewModel
         for (int i = 0; i < count; i++)
         {
             int slotIndex = _slots.Count;
-            _slots.Add(new SlotViewModel { SlotIndex = slotIndex, SlotType = SlotType.Inventory });
+            _slots.Add(new SlotViewModel { SlotIndex = slotIndex, SlotType = SlotType.General });
 
             if (clearExistingData)
             {
@@ -323,7 +338,7 @@ public class InventoryViewModel
             _quickSlots.Add(new SlotViewModel
             {
                 SlotIndex = slotIndex,
-                SlotType = SlotType.QuickSlot,
+                SlotType = SlotType.QuickAccess,
                 Keybind = (slotIndex + 1).ToString() // 继续原有键位编号
             });
         }
@@ -442,7 +457,7 @@ public class InventoryViewModel
         // 重新初始化到初始配置
         for (int i = 0; i < _initialSlots; i++)
         {
-            _slots.Add(new SlotViewModel { SlotIndex = i, SlotType = SlotType.Inventory });
+            _slots.Add(new SlotViewModel { SlotIndex = i, SlotType = SlotType.General });
         }
 
         for (int i = 0; i < _initialQuickSlots; i++)
@@ -450,7 +465,7 @@ public class InventoryViewModel
             _quickSlots.Add(new SlotViewModel
             {
                 SlotIndex = i,
-                SlotType = SlotType.QuickSlot,
+                SlotType = SlotType.QuickAccess,
                 Keybind = (i + 1).ToString()
             });
         }
@@ -483,8 +498,8 @@ public struct CapacityInfo
     public int QuickSlotsCount;
     public int OccupiedMainSlots;
     public int OccupiedQuickSlots;
-    public int TotalWeight;
-    public int MaxWeight;
+    public float TotalWeight;
+    public float MaxWeight;
 }
 
 /// <summary>扩展统计信息</summary>
@@ -498,11 +513,4 @@ public struct ExpansionStats
     public bool IsMaxCapacityReached;
 }
 
-/// <summary>槽位类型</summary>
-public enum SlotType
-{
-    Inventory,
-    QuickSlot,
-    Equipment,
-    Crafting
-}
+// SlotType 枚举统一使用 SurvivalGame.Data.Inventory.SlotType

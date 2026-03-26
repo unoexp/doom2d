@@ -20,14 +20,15 @@ namespace SurvivalGame.Data.Inventory
 
     /// <summary>
     /// 槽位数据定义，用于配置背包布局
+    /// 🏗️ 纯数据：CanAcceptItem 由调用方传入物品分类，不自行加载 SO
     /// </summary>
     [Serializable]
     public struct InventorySlot
     {
         // ============ 配置数据 ============
-        [SerializeField] private int _index;            // 槽位索引
-        [SerializeField] private SlotType _slotType;    // 槽位类型
-        [SerializeField] private string[] _allowedCategories; // 允许的物品分类
+        [SerializeField] private int _index;
+        [SerializeField] private SlotType _slotType;
+        [SerializeField] private string[] _allowedCategories;
 
         // ============ 运行时状态 ============
         [SerializeField] private ItemStack _itemStack;
@@ -54,34 +55,36 @@ namespace SurvivalGame.Data.Inventory
         public bool IsValid => _index >= 0;
 
         // ============ 验证方法 ============
-        public bool CanAcceptItem(ItemStack itemStack)
+
+        /// <summary>
+        /// 检查槽位是否可接受指定物品
+        /// 🏗️ category 由调用方通过 IItemDataService 查询后传入，数据层不做资源加载
+        /// </summary>
+        public bool CanAcceptItem(ItemStack itemStack, ItemCategory category)
         {
             if (!IsValid) return false;
             if (itemStack.IsEmpty) return false;
-
-            var definition = itemStack.GetDefinition();
-            if (definition == null) return false;
 
             // 检查槽位类型限制
             switch (_slotType)
             {
                 case SlotType.Weapon:
-                    return definition.Category == ItemCategory.Weapon;
+                    return category == ItemCategory.Weapon;
                 case SlotType.Armor:
-                    return definition.Category == ItemCategory.Armor;
+                    return category == ItemCategory.Armor;
                 case SlotType.Tool:
-                    return definition.Category == ItemCategory.Tool;
+                    return category == ItemCategory.Tool;
                 case SlotType.QuickAccess:
                     // 快捷栏允许武器、工具、消耗品
-                    return definition.Category == ItemCategory.Weapon ||
-                           definition.Category == ItemCategory.Tool ||
-                           definition.Category == ItemCategory.Consumable;
+                    return category == ItemCategory.Weapon ||
+                           category == ItemCategory.Tool ||
+                           category == ItemCategory.Consumable;
             }
 
             // 检查自定义分类过滤
             if (_allowedCategories.Length > 0)
             {
-                string itemCategoryStr = definition.Category.ToString();
+                string itemCategoryStr = category.ToString();
                 foreach (var allowedCategory in _allowedCategories)
                 {
                     if (allowedCategory == itemCategoryStr)
@@ -94,11 +97,13 @@ namespace SurvivalGame.Data.Inventory
         }
 
         // ============ 操作方法 ============
+
+        /// <summary>
+        /// 设置槽位中的物品
+        /// 🏗️ 不做类型验证：验证职责由 InventorySystem 在调用前通过 CanAcceptItem 执行
+        /// </summary>
         public InventorySlot WithItem(ItemStack itemStack)
         {
-            if (!CanAcceptItem(itemStack))
-                throw new ArgumentException($"槽位 {_index} 无法接受物品 {itemStack.ItemId}");
-
             return new InventorySlot(_index, _slotType, _allowedCategories)
             {
                 _itemStack = itemStack

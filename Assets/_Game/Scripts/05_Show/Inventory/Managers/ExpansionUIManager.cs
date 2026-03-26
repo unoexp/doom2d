@@ -7,7 +7,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using SurvivalGame.Show.Inventory.ViewModels;
+using SurvivalGame.Show.Inventory;
 using SurvivalGame.Show.Inventory.Views.Components;
 
 namespace SurvivalGame.Show.Inventory.Managers

@@ -303,10 +303,10 @@ namespace SurvivalGame.Show.Inventory.Views.Components
                         level.LevelId,
                         level.DisplayName,
                         level.Description,
-                        level.IsUnlocked,
-                        level.CanStart,
+                        !level.IsLocked,
+                        level.CanStartExpansion(),
                         level.IsCompleted,
-                        level.RequirementsMet
+                        level.AllRequirementsMet
                     );
 
                     // 绑定点击事件
@@ -346,8 +346,8 @@ namespace SurvivalGame.Show.Inventory.Views.Components
                 if (level.WeightLimitBoost > 0)
                     effectDesc += $", 负重 +{level.WeightLimitBoost}";
 
-                if (level.UnlockSpecialSlots > 0)
-                    effectDesc += $", 特殊槽位 +{level.UnlockSpecialSlots}";
+                if (level.UnlockSpecialSlots)
+                    effectDesc += $", 特殊槽位解锁";
 
                 _detailDescriptionText.text = $"{level.Description}\n\n{effectDesc}";
             }
@@ -358,7 +358,7 @@ namespace SurvivalGame.Show.Inventory.Views.Components
             // 更新扩展按钮状态
             if (_detailExpandButton != null)
             {
-                _detailExpandButton.interactable = level.CanStart && !level.IsCompleted;
+                _detailExpandButton.interactable = level.CanStartExpansion() && !level.IsCompleted;
                 var buttonText = _detailExpandButton.GetComponentInChildren<TMP_Text>();
                 if (buttonText != null)
                 {
@@ -417,8 +417,8 @@ namespace SurvivalGame.Show.Inventory.Views.Components
                     ShowProgress(
                         currentLevel.LevelId,
                         viewModel.CurrentExpansionProgress,
-                        currentLevel.StatusText,
-                        FormatTimeRemaining(viewModel.RemainingTime)
+                        currentLevel.StateText,
+                        FormatTimeRemaining(viewModel.CurrentExpansionRemainingTime)
                     );
                 }
             }

@@ -32,12 +32,12 @@ public interface IAssetBundleLoader
     /// <param name="bundleName">Bundle名称</param>
     /// <param name="assetPath">资源在Bundle中的路径</param>
     /// <returns>加载的资源</returns>
-    T LoadFromBundle<T>(string bundleName, string assetPath) where T : Object;
+    T LoadFromBundle<T>(string bundleName, string assetPath) where T : UnityEngine.Object;
 
     /// <summary>
     /// 异步从Bundle中加载资源
     /// </summary>
-    T LoadFromBundleAsync<T>(string bundleName, string assetPath) where T : Object;
+    LoadOperation<T> LoadFromBundleAsync<T>(string bundleName, string assetPath) where T : UnityEngine.Object;
 
     /// <summary>
     /// 卸载AssetBundle

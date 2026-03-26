@@ -34,36 +34,8 @@ namespace SurvivalGame.Show.Inventory.Adapters
             if (config == null)
                 throw new ArgumentNullException(nameof(config));
 
-            // 创建基础ViewModel
-            var viewModel = new ExpansionConfigViewModel();
-
-            // 设置基础配置
-            viewModel.ExpansionId = config.ExpansionId;
-            viewModel.TargetContainerId = config.TargetContainerId;
-            viewModel.DisplayName = config.DisplayName;
-            viewModel.Description = config.Description;
-            viewModel.IconPath = GetIconPath(config);
-            viewModel.ThemeColor = ConvertUnityColor(config.ThemeColor);
-            viewModel.MaxTotalExpansions = config.MaxTotalExpansions;
-            viewModel.AllowParallelExpansion = config.AllowParallelExpansion;
-            viewModel.DefaultExpansionDuration = config.ExpansionDuration;
-
-            // 创建级别ViewModels
-            var levels = new List<ExpansionLevelViewModel>();
-            foreach (var levelConfig in config.ExpansionLevels)
-            {
-                var levelVm = ConvertLevelToViewModel(levelConfig, levelConfig.Effects);
-                levels.Add(levelVm);
-            }
-
-            // 按级别序号排序
-            levels.Sort((a, b) => a.LevelNumber.CompareTo(b.LevelNumber));
-            viewModel.ExpansionLevels = levels;
-
-            // 初始化索引
-            var levelsById = new Dictionary<string, ExpansionLevelViewModel>();
-            foreach (var level in levels)
-                levelsById[level.LevelId] = level;
+            // 使用工厂方法创建ViewModel
+            var viewModel = ExpansionConfigViewModel.CreateFromConfig(config);
 
             // 设置当前系统状态
             var systemState = DetermineSystemState(completedLevelIds, config, currentExpansionLevelId);
@@ -92,30 +64,7 @@ namespace SurvivalGame.Show.Inventory.Adapters
             ExpansionLevel level,
             ExpansionEffect effect)
         {
-            var viewModel = new ExpansionLevelViewModel
-            {
-                LevelId = level.LevelId,
-                LevelNumber = level.LevelNumber,
-                DisplayName = level.DisplayName,
-                Description = level.Description,
-                AdditionalSlots = effect.AdditionalSlots,
-                WeightLimitBoost = effect.WeightLimitBoost,
-                UnlockSpecialSlots = effect.UnlockSpecialSlots,
-                NewSlotTypes = effect.NewSlotTypes ?? Array.Empty<string>(),
-                EffectDescription = effect.Description,
-                PrerequisiteLevelIds = level.PrerequisiteLevelIds ?? Array.Empty<string>()
-            };
-
-            // 创建Requirement ViewModels
-            var requirements = new List<ExpansionRequirementViewModel>();
-            foreach (var requirement in level.Requirements)
-            {
-                var requirementVm = ConvertRequirementToViewModel(requirement);
-                requirements.Add(requirementVm);
-            }
-            viewModel.Requirements = requirements;
-
-            return viewModel;
+            return ExpansionLevelViewModel.CreateFromLevel(level, effect);
         }
 
         /// <summary>
@@ -125,20 +74,7 @@ namespace SurvivalGame.Show.Inventory.Adapters
         public static ExpansionRequirementViewModel ConvertRequirementToViewModel(
             ExpansionRequirement requirement)
         {
-            var viewModel = new ExpansionRequirementViewModel
-            {
-                Type = requirement.Type,
-                TargetId = requirement.TargetId,
-                RequiredValue = requirement.RequiredValue,
-                RequiredFloatValue = requirement.RequiredFloatValue,
-                Description = requirement.Description,
-                DisplayText = requirement.Description ?? "条件未知",
-                StatusText = "未检查",
-                ProgressPercentage = 0f,
-                IsMet = false
-            };
-
-            return viewModel;
+            return ExpansionRequirementViewModel.CreateFromRequirement(requirement);
         }
 
         // ============ 状态同步方法 ============
@@ -270,23 +206,6 @@ namespace SurvivalGame.Show.Inventory.Adapters
             return "UI/Icons/Expansion/Default";
         }
 
-        /// <summary>
-        /// 转换Unity颜色
-        /// 🎨 Unity Color -> 自定义Color结构
-        /// </summary>
-        public static Color ConvertUnityColor(UnityEngine.Color unityColor)
-        {
-            return new Color(unityColor.r, unityColor.g, unityColor.b, unityColor.a);
-        }
-
-        /// <summary>
-        /// 转换回Unity颜色
-        /// 🎨 自定义Color结构 -> Unity Color
-        /// </summary>
-        public static UnityEngine.Color ConvertToUnityColor(Color customColor)
-        {
-            return new UnityEngine.Color(customColor.R, customColor.G, customColor.B, customColor.A);
-        }
 
         /// <summary>
         /// 获取扩展所需资源列表
@@ -397,24 +316,7 @@ namespace SurvivalGame.Show.Inventory.Adapters
         /// </summary>
         public static ExpansionConfigViewModel CreateDefaultViewModel()
         {
-            var viewModel = new ExpansionConfigViewModel
-            {
-                ExpansionId = "Default_Expansion",
-                TargetContainerId = "MainInventory",
-                DisplayName = "背包扩展",
-                Description = "扩展背包容量，增加负重上限",
-                IconPath = "UI/Icons/Expansion/Default",
-                ThemeColor = Color.White,
-                MaxTotalExpansions = 5,
-                AllowParallelExpansion = false,
-                DefaultExpansionDuration = 60f,
-                SystemState = ExpansionSystemState.Idle,
-                TotalLevelsCount = 0,
-                CompletedLevelsCount = 0,
-                AvailableLevelsCount = 0
-            };
-
-            return viewModel;
+            return ExpansionConfigViewModel.CreateDefault();
         }
     }
 }

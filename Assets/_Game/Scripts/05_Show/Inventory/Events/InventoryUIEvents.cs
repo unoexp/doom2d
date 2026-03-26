@@ -2,6 +2,7 @@
 // ⚠️ 所有UI事件定义为结构体，零GC分配
 
 using UnityEngine;
+using SurvivalGame.Data.Inventory;
 
 /// <summary>
 /// 背包UI事件定义
@@ -33,8 +34,8 @@ public struct SlotDragEndedEvent : IEvent
     public Vector2 DropPosition;
 }
 
-// 快捷栏选择事件
-public struct QuickSlotSelectedEvent : IEvent
+// 快捷栏选择请求事件（UI交互发出，区别于业务层的QuickSlotSelectedEvent）
+public struct QuickSlotSelectRequestEvent : IEvent
 {
     public int QuickSlotIndex;
     public string ItemId;
@@ -57,8 +58,8 @@ public struct ItemTooltipShowEvent : IEvent
 // 物品提示隐藏事件
 public struct ItemTooltipHideEvent : IEvent { }
 
-// 背包过滤事件
-public struct InventoryFilterChangedEvent : IEvent
+// 背包过滤请求事件（UI交互发出，区别于业务层的InventoryFilterChangedEvent）
+public struct InventoryFilterRequestEvent : IEvent
 {
     public string FilterCategory;
 }
@@ -67,4 +68,52 @@ public struct InventoryFilterChangedEvent : IEvent
 public struct InventorySortChangedEvent : IEvent
 {
     public string SortMethod; // "Name", "Type", "Quantity", "Weight"
+}
+
+// ── 纯 UI 反馈事件（从 InventoryPresenter.cs 移至此处）──
+
+public enum UIFeedbackType
+{
+    ItemAdded,
+    ItemRemoved,
+    DragStart,
+    DragEnd,
+    InventoryOpen,
+    InventoryClose,
+    ItemMove
+}
+
+/// <summary>UI 槽位操作反馈事件</summary>
+public struct UIFeedbackEvent : IEvent
+{
+    public UIFeedbackType Type;
+    public int SlotIndex;
+}
+
+/// <summary>UI 消息通知事件</summary>
+public struct UINotificationEvent : IEvent
+{
+    public string Message;
+    public float Duration;
+}
+
+/// <summary>UI 右键菜单事件</summary>
+public struct UIContextMenuEvent : IEvent
+{
+    public int SlotIndex;
+    public SlotType SlotType;
+    public string ItemId;
+    public UnityEngine.Vector2 ScreenPosition;
+}
+
+/// <summary>背包筛选应用事件</summary>
+public struct UIFilterAppliedEvent : IEvent
+{
+    public string FilterCategory;
+}
+
+/// <summary>背包排序应用事件</summary>
+public struct UISortAppliedEvent : IEvent
+{
+    public string SortMethod;
 }

@@ -10,7 +10,7 @@ using UnityEngine;
 /// 继承 CustomYieldInstruction 可直接用于 Unity 协程等待
 /// </summary>
 /// <typeparam name="T">加载的资源类型</typeparam>
-public abstract class LoadOperation<T> : CustomYieldInstruction where T : UnityEngine.Object
+public abstract class LoadOperation<T> : CustomYieldInstruction
 {
     // ══════════════════════════════════════════════════════
     // 事件委托定义
@@ -201,6 +201,45 @@ public abstract class LoadOperation<T> : CustomYieldInstruction where T : UnityE
         }
 
         return tcs.Task.GetAwaiter();
+    }
+
+    // ══════════════════════════════════════════════════════
+    // 外部驱动接口（供协程管理器调用）
+    // ══════════════════════════════════════════════════════
+
+    /// <summary>通知加载成功</summary>
+    public void NotifySuccess(T result) => CompleteSuccess(result);
+
+    /// <summary>通知加载失败</summary>
+    public void NotifyFailure(Exception error) => CompleteFailure(error);
+
+    /// <summary>更新加载进度</summary>
+    public void SetProgress(float progress) => UpdateProgress(progress);
+
+    /// <summary>创建已完成（缓存命中）的操作</summary>
+    public static LoadOperation<T> CreateCompleted(string path, T result)
+    {
+        var op = new PendingOperation(path, null);
+        op.CompleteSuccess(result);
+        return op;
+    }
+
+    /// <summary>创建已失败的操作</summary>
+    public static LoadOperation<T> CreateFailed(string path, Exception error)
+    {
+        var op = new PendingOperation(path, null);
+        op.CompleteFailure(error);
+        return op;
+    }
+
+    /// <summary>创建待驱动的操作（由外部协程控制状态）</summary>
+    public static LoadOperation<T> CreatePending(string path, string requestId = null)
+        => new PendingOperation(path, requestId);
+
+    private sealed class PendingOperation : LoadOperation<T>
+    {
+        public PendingOperation(string path, string requestId) : base(path, requestId) { }
+        public override void Cancel() { }
     }
 
     /// <summary>ToString重写，显示加载状态</summary>

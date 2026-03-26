@@ -82,31 +82,24 @@ public sealed class AsyncLoadOperation<T> : LoadOperation<T> where T : UnityEngi
     /// </summary>
     private IEnumerator LoadRoutine()
     {
-        try
+        // 开始异步加载（yield不能在try-catch内，所以分开处理）
+        _resourceRequest = Resources.LoadAsync<T>(ResourcePath);
+
+        if (_resourceRequest == null)
         {
-            // 开始异步加载
-            _resourceRequest = Resources.LoadAsync<T>(ResourcePath);
-
-            if (_resourceRequest == null)
-            {
-                throw new InvalidOperationException($"Resources.LoadAsync返回null: {ResourcePath}");
-            }
-
-            // 等待加载完成，同时更新进度
-            while (!_resourceRequest.isDone)
-            {
-                UpdateProgress(_resourceRequest.progress);
-                yield return null;
-            }
-
-            // 加载完成，处理结果
-            ProcessLoadResult();
+            CompleteFailure(new InvalidOperationException($"Resources.LoadAsync返回null: {ResourcePath}"));
+            yield break;
         }
-        catch (Exception ex)
+
+        // 等待加载完成，同时更新进度
+        while (!_resourceRequest.isDone)
         {
-            // 加载过程中发生异常
-            CompleteFailure(ResourceLoadException.NotFound(ResourcePath));
+            UpdateProgress(_resourceRequest.progress);
+            yield return null;
         }
+
+        // 加载完成，处理结果
+        ProcessLoadResult();
     }
 
     /// <summary>

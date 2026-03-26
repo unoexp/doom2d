@@ -15,7 +15,7 @@ public interface IResourceLoader
     /// <typeparam name="T">资源类型（GameObject, Sprite, Material等）</typeparam>
     /// <param name="path">Resources目录下的相对路径（不带扩展名）</param>
     /// <returns>加载的资源，如果不存在则抛出ResourceLoadException</returns>
-    T Load<T>(string path) where T : Object;
+    T Load<T>(string path) where T : UnityEngine.Object;
 
     /// <summary>
     /// 异步加载资源
@@ -23,7 +23,7 @@ public interface IResourceLoader
     /// <typeparam name="T">资源类型</typeparam>
     /// <param name="path">资源路径</param>
     /// <returns>加载操作对象，可用于协程等待或进度跟踪</returns>
-    LoadOperation<T> LoadAsync<T>(string path) where T : Object;
+    LoadOperation<T> LoadAsync<T>(string path) where T : UnityEngine.Object;
 
     /// <summary>
     /// 预加载资源到缓存（不立即使用）
@@ -31,7 +31,7 @@ public interface IResourceLoader
     /// <typeparam name="T">资源类型</typeparam>
     /// <param name="path">资源路径</param>
     /// <param name="priority">加载优先级（0-100，越高越优先）</param>
-    void Preload<T>(string path, int priority = 50) where T : Object;
+    void Preload<T>(string path, int priority = 50) where T : UnityEngine.Object;
 
     /// <summary>
     /// 卸载资源（从缓存中移除，如果无其他引用则真正卸载）

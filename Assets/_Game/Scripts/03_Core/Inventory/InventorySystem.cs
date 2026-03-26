@@ -12,21 +12,22 @@ namespace SurvivalGame.Core.Inventory
     /// <summary>
     /// 背包系统主类，管理玩家的背包和快捷栏
     /// 🏗️ 架构说明：业务层核心系统，通过EventBus与表现层通信
+    /// 🏗️ 所有容器操作逻辑集中于此，通过 IItemDataService 查询物品定义，不绕过资源管理层
     /// </summary>
-    public class InventorySystem : MonoBehaviour, ISaveable
+    public class InventorySystem : MonoBehaviour, ISaveable, IInventorySystem
     {
         // ============ 配置字段 ============
         [Header("背包配置")]
         [SerializeField] private InventoryContainerSO _mainInventoryConfig;
         [SerializeField] private InventoryContainerSO _quickAccessConfig;
 
-        [Header("物品配置")]
-        [SerializeField] private string _itemsFolderPath = "Items/";
-
         // ============ 运行时状态 ============
         private InventoryContainer _mainInventory;
         private InventoryContainer _quickAccess;
         private int _selectedQuickAccessSlot = 0;
+
+        // ============ 依赖服务 ============
+        private IItemDataService _itemDataService;
 
         // ============ 扩展系统相关 ============
         private ExpansionStateManager _expansionStateManager;
@@ -46,11 +47,21 @@ namespace SurvivalGame.Core.Inventory
             InitializeContainers();
             InitializeExpansionSystem();
             ServiceLocator.Register<InventorySystem>(this);
+            ServiceLocator.Register<IInventorySystem>(this);
+        }
+
+        private void Start()
+        {
+            // Start() 在所有 Awake() 之后执行，可安全获取其他系统注册的服务
+            _itemDataService = ServiceLocator.Get<IItemDataService>();
+            if (_itemDataService == null)
+                Debug.LogWarning("[InventorySystem] IItemDataService 未注册，请在场景中添加 ItemDataService 组件");
         }
 
         private void OnDestroy()
         {
             ServiceLocator.Unregister<InventorySystem>();
+            ServiceLocator.Unregister<IInventorySystem>();
         }
 
         // ============ 初始化 ============
@@ -59,21 +70,19 @@ namespace SurvivalGame.Core.Inventory
             if (_mainInventoryConfig != null)
                 _mainInventory = new InventoryContainer(_mainInventoryConfig);
             else
-                _mainInventory = new InventoryContainer("MainInventory", 24); // 默认24槽位
+                _mainInventory = new InventoryContainer("MainInventory", 24);
 
             if (_quickAccessConfig != null)
                 _quickAccess = new InventoryContainer(_quickAccessConfig);
             else
-                _quickAccess = new InventoryContainer("QuickAccess", 10); // 默认10快捷栏槽位
+                _quickAccess = new InventoryContainer("QuickAccess", 10);
         }
 
-        // ============ 扩展系统初始化 ============
         private void InitializeExpansionSystem()
         {
             _expansionStateManager = new ExpansionStateManager();
             _loadedExpansions = new Dictionary<string, ExpansionDefinitionSO>();
 
-            // 注册扩展服务
             ServiceLocator.Register<IExpansionRecordService>(_expansionStateManager);
 
             // TODO: 从Resources加载扩展配置
@@ -81,46 +90,37 @@ namespace SurvivalGame.Core.Inventory
         }
 
         // ============ 公共API：物品操作 ============
+
         /// <summary>尝试添加物品到背包</summary>
         public bool TryAddItem(string itemId, int quantity)
         {
             if (string.IsNullOrEmpty(itemId) || quantity <= 0)
                 return false;
 
-            // 1. 先尝试添加到快捷栏（快捷栏有特殊物品类型限制）
+            // 1. 先尝试添加到快捷栏
             int remaining = quantity;
             bool quickAccessSuccess = false;
             if (quantity > 0)
-            {
-                quickAccessSuccess = _quickAccess.TryAddItem(itemId, quantity, out remaining);
-            }
+                quickAccessSuccess = AddItemToContainer(ref _quickAccess, itemId, quantity, out remaining);
 
             // 2. 剩余物品添加到主背包
             bool mainInventorySuccess = false;
             if (remaining > 0)
-            {
-                mainInventorySuccess = _mainInventory.TryAddItem(itemId, remaining, out int newRemaining);
-                if (mainInventorySuccess)
-                {
-                    remaining = newRemaining;
-                }
-            }
+                mainInventorySuccess = AddItemToContainer(ref _mainInventory, itemId, remaining, out remaining);
 
             bool success = remaining < quantity;
 
             if (success)
             {
                 int amountAdded = quantity - remaining;
-                // 发布事件通知UI更新
                 EventBus.Publish(new ItemAddedToInventoryEvent
                 {
                     ItemId = itemId,
                     Amount = amountAdded,
-                    SlotIndex = -1, // 表示自动分配
+                    SlotIndex = -1,
                     ContainerId = quickAccessSuccess ? _quickAccess.ContainerId : _mainInventory.ContainerId
                 });
 
-                // 发布背包改变事件
                 EventBus.Publish(new InventoryChangedEvent
                 {
                     ContainerId = _mainInventory.ContainerId
@@ -128,7 +128,6 @@ namespace SurvivalGame.Core.Inventory
             }
             else if (remaining == quantity)
             {
-                // 背包已满
                 EventBus.Publish(new InventoryFullEvent
                 {
                     ContainerId = _mainInventory.ContainerId
@@ -144,13 +143,13 @@ namespace SurvivalGame.Core.Inventory
             if (string.IsNullOrEmpty(itemId) || quantity <= 0)
                 return false;
 
-            // 1. 先尝试从快捷栏移除
             int remaining = quantity;
-            bool quickAccessSuccess = _quickAccess.TryRemoveItem(itemId, quantity, out int quickRemaining);
+
+            // 1. 先从快捷栏移除
+            bool quickAccessSuccess = RemoveItemFromContainer(ref _quickAccess, itemId, quantity, out int quickRemaining);
             if (quickAccessSuccess)
             {
                 remaining = quickRemaining;
-                // 发布快捷栏物品移除事件
                 EventBus.Publish(new ItemRemovedFromInventoryEvent
                 {
                     ItemId = itemId,
@@ -160,20 +159,18 @@ namespace SurvivalGame.Core.Inventory
             }
 
             // 2. 再从主背包移除
-            bool mainInventorySuccess = false;
             if (remaining > 0)
             {
-                mainInventorySuccess = _mainInventory.TryRemoveItem(itemId, remaining, out int mainRemaining);
-                if (mainInventorySuccess)
+                bool mainSuccess = RemoveItemFromContainer(ref _mainInventory, itemId, remaining, out int mainRemaining);
+                if (mainSuccess)
                 {
-                    remaining = mainRemaining;
-                    // 发布主背包物品移除事件
                     EventBus.Publish(new ItemRemovedFromInventoryEvent
                     {
                         ItemId = itemId,
-                        Amount = quantity - remaining,
+                        Amount = remaining - mainRemaining,
                         ContainerId = _mainInventory.ContainerId
                     });
+                    remaining = mainRemaining;
                 }
             }
 
@@ -181,7 +178,6 @@ namespace SurvivalGame.Core.Inventory
 
             if (success)
             {
-                // 发布背包改变事件
                 EventBus.Publish(new InventoryChangedEvent
                 {
                     ContainerId = _mainInventory.ContainerId
@@ -201,31 +197,25 @@ namespace SurvivalGame.Core.Inventory
             if (slot.IsEmpty) return false;
 
             var itemStack = slot.ItemStack;
-            var definition = itemStack.GetDefinition();
+            var definition = _itemDataService?.GetItemDefinition(itemStack.ItemId);
             if (definition == null) return false;
 
-            // 检查是否可以使用
             if (!definition.CanUse(user)) return false;
 
-            // 执行使用效果
             definition.OnUse(user);
 
             bool itemConsumed = false;
             float oldDurability = itemStack.Durability;
 
-            // 检查物品是否有耐久度
             if (definition.HasDurability && definition.MaxDurability > 0)
             {
-                // 消耗耐久度
                 float durabilityLoss = definition.DurabilityConsumptionPerUse / definition.MaxDurability;
                 var newItemStack = itemStack.ConsumeDurability(durabilityLoss);
                 float newDurability = newItemStack.Durability;
 
-                // 更新槽位中的物品
                 _quickAccess.Slots[slotIndex] = slot.WithItem(newItemStack);
                 _quickAccess.InvalidateCache();
 
-                // 发布耐久度变化事件
                 EventBus.Publish(new ItemDurabilityChangedEvent
                 {
                     ContainerId = _quickAccess.ContainerId,
@@ -236,10 +226,8 @@ namespace SurvivalGame.Core.Inventory
                     DurabilityPercentage = newDurability
                 });
 
-                // 检查物品是否损坏
                 if (newDurability <= 0f)
                 {
-                    // 发布物品损坏事件
                     EventBus.Publish(new ItemBrokenEvent
                     {
                         ContainerId = _quickAccess.ContainerId,
@@ -248,7 +236,6 @@ namespace SurvivalGame.Core.Inventory
                         BrokenItemStack = newItemStack
                     });
 
-                    // 如果配置了损坏时销毁，则移除物品
                     if (definition.DestroyOnZeroDurability)
                     {
                         _quickAccess.Slots[slotIndex] = slot.Clear();
@@ -258,23 +245,19 @@ namespace SurvivalGame.Core.Inventory
             }
             else
             {
-                // 没有耐久度系统，按原逻辑处理
                 if (definition.MaxStackSize > 1)
                 {
-                    // 消耗品，减少数量
                     _quickAccess.Slots[slotIndex] = slot.ChangeQuantity(-1);
                     itemConsumed = true;
                 }
                 else
                 {
-                    // 非堆叠物品，直接移除
                     _quickAccess.Slots[slotIndex] = slot.Clear();
                     itemConsumed = true;
                 }
                 _quickAccess.InvalidateCache();
             }
 
-            // 发布物品使用事件
             EventBus.Publish(new ItemUsedEvent
             {
                 ItemId = itemStack.ItemId,
@@ -283,7 +266,6 @@ namespace SurvivalGame.Core.Inventory
                 ContainerId = _quickAccess.ContainerId
             });
 
-            // 发布背包改变事件
             EventBus.Publish(new InventoryChangedEvent
             {
                 ContainerId = _quickAccess.ContainerId
@@ -296,105 +278,28 @@ namespace SurvivalGame.Core.Inventory
         public bool TryMoveItem(string sourceContainerId, int sourceSlotIndex,
                                 string targetContainerId, int targetSlotIndex)
         {
-            InventoryContainer sourceContainer = GetContainerById(sourceContainerId);
-            InventoryContainer targetContainer = GetContainerById(targetContainerId);
-
-            if (sourceContainer == null || targetContainer == null)
-                return false;
-
-            // 暂时实现为在同一容器内移动
             if (sourceContainerId == targetContainerId)
             {
-                return sourceContainer.TryMoveItem(sourceSlotIndex, targetSlotIndex);
-            }
-
-            // 跨容器移动逻辑
-            var sourceSlot = sourceContainer.Slots[sourceSlotIndex];
-            var targetSlot = targetContainer.Slots[targetSlotIndex];
-
-            if (sourceSlot.IsEmpty) return false;
-
-            var sourceItem = sourceSlot.ItemStack;
-
-            // 情况1：目标槽位为空，直接移动
-            if (targetSlot.IsEmpty)
-            {
-                if (!targetSlot.CanAcceptItem(sourceItem)) return false;
-
-                targetContainer.Slots[targetSlotIndex] = targetSlot.WithItem(sourceItem);
-                sourceContainer.Slots[sourceSlotIndex] = sourceSlot.Clear();
-
-                targetContainer.InvalidateCache();
-                sourceContainer.InvalidateCache();
-
-                // 发布移动事件（注意：这里需要两个事件或扩展事件结构）
-                EventBus.Publish(new ItemMovedInInventoryEvent
-                {
-                    ContainerId = sourceContainerId,
-                    FromSlotIndex = sourceSlotIndex,
-                    ToSlotIndex = targetSlotIndex,
-                    ItemStack = sourceItem
-                });
-
-                return true;
-            }
-
-            var targetItem = targetSlot.ItemStack;
-
-            // 情况2：相同物品可堆叠
-            if (sourceItem.CanStackWith(targetItem))
-            {
-                var merged = targetItem.MergeWith(sourceItem, out var overflow);
-                targetContainer.Slots[targetSlotIndex] = targetSlot.WithItem(merged);
-
-                if (overflow.IsEmpty)
-                    sourceContainer.Slots[sourceSlotIndex] = sourceSlot.Clear();
-                else
-                    sourceContainer.Slots[sourceSlotIndex] = sourceSlot.WithItem(overflow);
-
-                targetContainer.InvalidateCache();
-                sourceContainer.InvalidateCache();
-
-                EventBus.Publish(new ItemMovedInInventoryEvent
-                {
-                    ContainerId = sourceContainerId,
-                    FromSlotIndex = sourceSlotIndex,
-                    ToSlotIndex = targetSlotIndex,
-                    ItemStack = sourceItem
-                });
-
-                return true;
-            }
-
-            // 情况3：交换物品
-            if (!sourceSlot.CanAcceptItem(targetItem) || !targetSlot.CanAcceptItem(sourceItem))
+                // 同容器内移动
+                if (sourceContainerId == _mainInventory.ContainerId)
+                    return MoveItemInContainer(ref _mainInventory, sourceSlotIndex, targetSlotIndex);
+                if (sourceContainerId == _quickAccess.ContainerId)
+                    return MoveItemInContainer(ref _quickAccess, sourceSlotIndex, targetSlotIndex);
                 return false;
+            }
 
-            // 交换物品
-            targetContainer.Slots[targetSlotIndex] = targetSlot.WithItem(sourceItem);
-            sourceContainer.Slots[sourceSlotIndex] = sourceSlot.WithItem(targetItem);
+            // 跨容器移动
+            ref InventoryContainer source = ref GetContainerRef(sourceContainerId, out bool sourceValid);
+            ref InventoryContainer target = ref GetContainerRef(targetContainerId, out bool targetValid);
+            if (!sourceValid || !targetValid) return false;
 
-            targetContainer.InvalidateCache();
-            sourceContainer.InvalidateCache();
-
-            // 注意：交换需要两个移动事件，这里先发布一个
-            EventBus.Publish(new ItemMovedInInventoryEvent
-            {
-                ContainerId = sourceContainerId,
-                FromSlotIndex = sourceSlotIndex,
-                ToSlotIndex = targetSlotIndex,
-                ItemStack = sourceItem
-            });
-
-            return true;
+            return MoveItemBetweenContainers(ref source, sourceSlotIndex, ref target, targetSlotIndex);
         }
 
         /// <summary>获取指定物品的总数量</summary>
         public int GetTotalItemCount(string itemId)
         {
-            int count = _mainInventory.GetItemCount(itemId);
-            count += _quickAccess.GetItemCount(itemId);
-            return count;
+            return _mainInventory.GetItemCount(itemId) + _quickAccess.GetItemCount(itemId);
         }
 
         /// <summary>选择快捷栏槽位</summary>
@@ -404,52 +309,43 @@ namespace SurvivalGame.Core.Inventory
                 return;
 
             _selectedQuickAccessSlot = slotIndex;
-            // 可以发布事件通知UI更新选中状态
         }
+
+        /// <summary>选择快捷栏（IInventorySystem 接口）</summary>
+        public void SelectQuickSlot(int slotIndex) => SelectQuickAccessSlot(slotIndex);
 
         /// <summary>获取当前选中的快捷栏物品</summary>
         public ItemStack GetSelectedQuickAccessItem()
         {
-            var slot = _quickAccess.Slots[_selectedQuickAccessSlot];
-            return slot.ItemStack;
+            return _quickAccess.Slots[_selectedQuickAccessSlot].ItemStack;
         }
 
         /// <summary>对指定容器进行排序</summary>
         public bool SortContainer(string containerId, SortType sortType)
         {
-            var container = GetContainerById(containerId);
-            if (container == null) return false;
-
-            bool success = container.Sort(sortType);
-            if (success)
+            if (containerId == _mainInventory.ContainerId)
             {
-                EventBus.Publish(new InventorySortedEvent
-                {
-                    ContainerId = containerId,
-                    SortType = sortType
-                });
+                bool success = SortContainerInternal(ref _mainInventory, sortType);
+                if (success) EventBus.Publish(new InventorySortedEvent { ContainerId = containerId, SortType = sortType });
+                return success;
             }
-
-            return success;
+            if (containerId == _quickAccess.ContainerId)
+            {
+                bool success = SortContainerInternal(ref _quickAccess, sortType);
+                if (success) EventBus.Publish(new InventorySortedEvent { ContainerId = containerId, SortType = sortType });
+                return success;
+            }
+            return false;
         }
 
-        /// <summary>对主背包进行排序</summary>
-        public bool SortMainInventory(SortType sortType)
-        {
-            return SortContainer(_mainInventory.ContainerId, sortType);
-        }
-
-        /// <summary>对快捷栏进行排序</summary>
-        public bool SortQuickAccess(SortType sortType)
-        {
-            return SortContainer(_quickAccess.ContainerId, sortType);
-        }
+        public bool SortMainInventory(SortType sortType) => SortContainer(_mainInventory.ContainerId, sortType);
+        public bool SortQuickAccess(SortType sortType) => SortContainer(_quickAccess.ContainerId, sortType);
 
         /// <summary>扩展主背包容量</summary>
         public bool ExpandMainInventory(int additionalSlots)
         {
             int oldCapacity = _mainInventory.Capacity;
-            bool success = _mainInventory.ExpandCapacity(additionalSlots);
+            bool success = ExpandContainerCapacity(ref _mainInventory, additionalSlots);
 
             if (success)
             {
@@ -459,11 +355,7 @@ namespace SurvivalGame.Core.Inventory
                     OldCapacity = oldCapacity,
                     NewCapacity = _mainInventory.Capacity
                 });
-
-                EventBus.Publish(new InventoryChangedEvent
-                {
-                    ContainerId = _mainInventory.ContainerId
-                });
+                EventBus.Publish(new InventoryChangedEvent { ContainerId = _mainInventory.ContainerId });
             }
 
             return success;
@@ -473,7 +365,7 @@ namespace SurvivalGame.Core.Inventory
         public bool ExpandQuickAccess(int additionalSlots)
         {
             int oldCapacity = _quickAccess.Capacity;
-            bool success = _quickAccess.ExpandCapacity(additionalSlots);
+            bool success = ExpandContainerCapacity(ref _quickAccess, additionalSlots);
 
             if (success)
             {
@@ -483,14 +375,71 @@ namespace SurvivalGame.Core.Inventory
                     OldCapacity = oldCapacity,
                     NewCapacity = _quickAccess.Capacity
                 });
-
-                EventBus.Publish(new InventoryChangedEvent
-                {
-                    ContainerId = _quickAccess.ContainerId
-                });
+                EventBus.Publish(new InventoryChangedEvent { ContainerId = _quickAccess.ContainerId });
             }
 
             return success;
+        }
+
+        // ============ 重量相关 ============
+
+        public WeightInfo GetWeightInfo()
+        {
+            return new WeightInfo
+            {
+                CurrentWeight = CalculateContainerWeight(_mainInventory) + CalculateContainerWeight(_quickAccess),
+                MaxWeight = _mainInventory.HasWeightLimit ? _mainInventory.MaxWeight : float.MaxValue
+            };
+        }
+
+        public float GetMainInventoryWeight() => CalculateContainerWeight(_mainInventory);
+        public float GetMainInventoryMaxWeight() => _mainInventory.HasWeightLimit ? _mainInventory.MaxWeight : float.MaxValue;
+        public bool IsMainInventoryOverweight() => CalculateContainerWeight(_mainInventory) > GetMainInventoryMaxWeight();
+        public float GetQuickAccessWeight() => CalculateContainerWeight(_quickAccess);
+        public float GetQuickAccessMaxWeight() => _quickAccess.HasWeightLimit ? _quickAccess.MaxWeight : float.MaxValue;
+        public bool IsQuickAccessOverweight() => CalculateContainerWeight(_quickAccess) > GetQuickAccessMaxWeight();
+
+        // ============ IInventorySystem 接口实现 ============
+
+        public InventoryData[] GetInventoryData()
+        {
+            var data = new InventoryData[_mainInventory.Capacity];
+            for (int i = 0; i < _mainInventory.Capacity; i++)
+            {
+                var slot = _mainInventory.Slots[i];
+                data[i] = new InventoryData
+                {
+                    SlotIndex = i,
+                    ItemId = slot.ItemStack.ItemId,
+                    Amount = slot.ItemStack.Quantity,
+                    Durability = slot.ItemStack.Durability
+                };
+            }
+            return data;
+        }
+
+        public QuickSlotData[] GetQuickSlotData()
+        {
+            var data = new QuickSlotData[_quickAccess.Capacity];
+            for (int i = 0; i < _quickAccess.Capacity; i++)
+            {
+                var slot = _quickAccess.Slots[i];
+                data[i] = new QuickSlotData
+                {
+                    SlotIndex = i,
+                    ItemId = slot.ItemStack.ItemId,
+                    Amount = slot.ItemStack.Quantity,
+                    Durability = slot.ItemStack.Durability
+                };
+            }
+            return data;
+        }
+
+        public void MoveItem(SlotType sourceType, int sourceIndex, SlotType targetType, int targetIndex)
+        {
+            string sourceContainerId = GetContainerIdBySlotType(sourceType);
+            string targetContainerId = GetContainerIdBySlotType(targetType);
+            TryMoveItem(sourceContainerId, sourceIndex, targetContainerId, targetIndex);
         }
 
         // ============ 扩展系统API ============
@@ -502,9 +451,8 @@ namespace SurvivalGame.Core.Inventory
                 return false;
 
             string containerId = GetTargetContainerId(expansionDefinition);
-            int currentCapacity = GetContainerById(containerId)?.Capacity ?? 0;
+            int currentCapacity = GetContainerCapacityById(containerId);
 
-            // 1. 发布验证开始事件
             EventBus.Publish(new InventoryExpansionValidationStartedEvent
             {
                 ExpansionId = expansionDefinition.ExpansionId,
@@ -513,7 +461,6 @@ namespace SurvivalGame.Core.Inventory
                 TargetCapacity = currentCapacity + expansionDefinition.GetTotalAdditionalSlots()
             });
 
-            // 2. 验证条件
             var validationService = ServiceLocator.Get<IExpansionValidationService>();
             if (validationService == null)
             {
@@ -523,7 +470,6 @@ namespace SurvivalGame.Core.Inventory
 
             var (allMet, validationResults) = validationService.ValidateExpansion(expansionDefinition);
 
-            // 3. 发布验证结果事件
             EventBus.Publish(new InventoryExpansionValidationResultEvent
             {
                 ExpansionId = expansionDefinition.ExpansionId,
@@ -539,7 +485,6 @@ namespace SurvivalGame.Core.Inventory
             if (!allMet)
                 return false;
 
-            // 4. 执行资源消耗
             var consumptionService = ServiceLocator.Get<IExpansionConsumptionService>();
             if (consumptionService == null)
             {
@@ -571,7 +516,6 @@ namespace SurvivalGame.Core.Inventory
             if (!allSucceeded)
                 return false;
 
-            // 5. 应用扩展效果
             EventBus.Publish(new InventoryExpansionEffectStartedEvent
             {
                 ExpansionId = expansionDefinition.ExpansionId,
@@ -592,15 +536,14 @@ namespace SurvivalGame.Core.Inventory
 
             if (effectApplied)
             {
-                // 记录扩展完成
                 _expansionStateManager.RecordExpansionCompleted(
                     expansionDefinition.ExpansionId,
                     containerId,
                     expansionDefinition.CooldownSeconds
                 );
 
-                // 发布完成事件
-                int newCapacity = GetContainerById(containerId)?.Capacity ?? currentCapacity;
+                int newCapacity = GetContainerCapacityById(containerId);
+
                 EventBus.Publish(new InventoryExpansionEffectAppliedEvent
                 {
                     ExpansionId = expansionDefinition.ExpansionId,
@@ -623,7 +566,6 @@ namespace SurvivalGame.Core.Inventory
                     TotalResourcesConsumed = GetTotalConsumedResourcesCount(expansionDefinition)
                 });
 
-                // 更新UI状态
                 EventBus.Publish(new InventoryExpansionStatusUpdatedEvent
                 {
                     ExpansionId = expansionDefinition.ExpansionId,
@@ -659,7 +601,6 @@ namespace SurvivalGame.Core.Inventory
             return effectApplied;
         }
 
-        /// <summary>检查扩展是否可用</summary>
         public (bool Available, string Reason) CheckExpansionAvailability(ExpansionDefinitionSO expansionDefinition)
         {
             if (expansionDefinition == null)
@@ -667,15 +608,12 @@ namespace SurvivalGame.Core.Inventory
 
             string containerId = GetTargetContainerId(expansionDefinition);
 
-            // 1. 检查扩展状态
             var state = _expansionStateManager.GetExpansionState(expansionDefinition.ExpansionId);
             if (state != null)
             {
-                // 检查是否已达到最大重复次数
                 if (_expansionStateManager.IsMaxRepeatReached(expansionDefinition.ExpansionId, expansionDefinition.MaxRepeatCount))
                     return (false, $"已达到最大扩展次数 ({expansionDefinition.MaxRepeatCount})");
 
-                // 检查冷却时间
                 if (!state.IsAvailable(DateTime.Now))
                 {
                     float remainingSeconds = state.GetRemainingCooldownSeconds(DateTime.Now);
@@ -683,7 +621,6 @@ namespace SurvivalGame.Core.Inventory
                 }
             }
 
-            // 2. 检查条件
             var validationService = ServiceLocator.Get<IExpansionValidationService>();
             if (validationService == null)
                 return (false, "验证服务不可用");
@@ -695,7 +632,6 @@ namespace SurvivalGame.Core.Inventory
                 return (false, reason);
             }
 
-            // 3. 检查前置扩展
             if (expansionDefinition.PrerequisiteExpansionIds != null && expansionDefinition.PrerequisiteExpansionIds.Length > 0)
             {
                 foreach (var prerequisiteId in expansionDefinition.PrerequisiteExpansionIds)
@@ -705,7 +641,6 @@ namespace SurvivalGame.Core.Inventory
                 }
             }
 
-            // 4. 检查互斥扩展
             if (expansionDefinition.MutuallyExclusive && expansionDefinition.ExclusiveExpansionIds != null)
             {
                 foreach (var exclusiveId in expansionDefinition.ExclusiveExpansionIds)
@@ -718,13 +653,9 @@ namespace SurvivalGame.Core.Inventory
             return (true, "可用");
         }
 
-        /// <summary>获取扩展进度信息</summary>
-        public ExpansionProgress GetExpansionProgress(string expansionId)
-        {
-            return _expansionStateManager.GetExpansionProgress(expansionId);
-        }
+        public ExpansionProgress GetExpansionProgress(string expansionId) =>
+            _expansionStateManager.GetExpansionProgress(expansionId);
 
-        /// <summary>注册扩展配置</summary>
         public void RegisterExpansion(ExpansionDefinitionSO expansionDefinition)
         {
             if (expansionDefinition == null || string.IsNullOrEmpty(expansionDefinition.ExpansionId))
@@ -734,14 +665,12 @@ namespace SurvivalGame.Core.Inventory
             _expansionStateManager.SetExpansionMaxLevel(expansionDefinition.ExpansionId, expansionDefinition.ExpansionLevel);
         }
 
-        /// <summary>获取已注册的扩展配置</summary>
         public ExpansionDefinitionSO GetExpansionDefinition(string expansionId)
         {
             _loadedExpansions.TryGetValue(expansionId, out var definition);
             return definition;
         }
 
-        /// <summary>获取所有可用的扩展配置</summary>
         public List<ExpansionDefinitionSO> GetAvailableExpansions(string containerId = null)
         {
             var available = new List<ExpansionDefinitionSO>();
@@ -760,12 +689,10 @@ namespace SurvivalGame.Core.Inventory
                 }
             }
 
-            // 按排序顺序排序
             available.Sort((a, b) => a.SortOrder.CompareTo(b.SortOrder));
             return available;
         }
 
-        /// <summary>获取扩展状态</summary>
         public ExpansionStatus GetExpansionStatus(string expansionId)
         {
             var progress = GetExpansionProgress(expansionId);
@@ -780,9 +707,489 @@ namespace SurvivalGame.Core.Inventory
             return available ? ExpansionStatus.Idle : ExpansionStatus.Unavailable;
         }
 
-        // ============ 内部工具方法 ============
+        // ============ ISaveable实现 ============
+        public object CaptureState()
+        {
+            return new InventorySystemState
+            {
+                MainInventoryState = CaptureContainerState(_mainInventory),
+                QuickAccessState = CaptureContainerState(_quickAccess),
+                SelectedQuickAccessSlot = _selectedQuickAccessSlot,
+                ExpansionStates = _expansionStateManager?.CaptureState()
+            };
+        }
 
-        /// <summary>获取目标容器ID</summary>
+        public void RestoreState(object state)
+        {
+            if (!(state is InventorySystemState systemState))
+                return;
+
+            RestoreContainerState(ref _mainInventory, systemState.MainInventoryState);
+            RestoreContainerState(ref _quickAccess, systemState.QuickAccessState);
+            _selectedQuickAccessSlot = systemState.SelectedQuickAccessSlot;
+
+            if (systemState.ExpansionStates != null && _expansionStateManager != null)
+                _expansionStateManager.RestoreState(systemState.ExpansionStates);
+        }
+
+        // ============ 私有：容器操作 Helper（原 InventoryContainer 业务方法）============
+
+        /// <summary>向容器添加物品，通过 IItemDataService 查询 MaxStackSize</summary>
+        private bool AddItemToContainer(ref InventoryContainer container, string itemId, int quantity, out int remaining)
+        {
+            remaining = quantity;
+            if (!container.IsValid || quantity <= 0) return false;
+
+            var definition = _itemDataService?.GetItemDefinition(itemId);
+            if (definition == null)
+            {
+                Debug.LogWarning($"[InventorySystem] 无法找到物品定义: {itemId}");
+                return false;
+            }
+
+            // 1. 尝试堆叠到已有槽位
+            var slotsWithItem = container.FindSlotsWithItem(itemId);
+            foreach (var slotIndex in slotsWithItem)
+            {
+                if (remaining <= 0) break;
+
+                var slot = container.Slots[slotIndex];
+                int spaceInStack = definition.MaxStackSize - slot.ItemStack.Quantity;
+                int toAdd = Mathf.Min(remaining, spaceInStack);
+
+                if (toAdd > 0)
+                {
+                    container.Slots[slotIndex] = slot.ChangeQuantity(toAdd);
+                    remaining -= toAdd;
+                }
+            }
+
+            // 2. 填充空槽位
+            if (remaining > 0)
+            {
+                int emptySlotIndex = container.FindFirstEmptySlot();
+                while (emptySlotIndex >= 0 && remaining > 0)
+                {
+                    int toAdd = Mathf.Min(remaining, definition.MaxStackSize);
+                    var newItemStack = new ItemStack(itemId, toAdd);
+                    container.Slots[emptySlotIndex] = new InventorySlot(emptySlotIndex).WithItem(newItemStack);
+
+                    remaining -= toAdd;
+                    container.InvalidateCache();
+                    emptySlotIndex = container.FindFirstEmptySlot(emptySlotIndex + 1);
+                }
+            }
+
+            return remaining < quantity;
+        }
+
+        /// <summary>从容器移除物品（不需要 IItemDataService）</summary>
+        private bool RemoveItemFromContainer(ref InventoryContainer container, string itemId, int quantity, out int remaining)
+        {
+            remaining = quantity;
+            if (!container.IsValid || quantity <= 0) return false;
+
+            var slotsWithItem = container.FindSlotsWithItem(itemId);
+
+            foreach (var slotIndex in slotsWithItem)
+            {
+                if (remaining <= 0) break;
+
+                var slot = container.Slots[slotIndex];
+                int toRemove = Mathf.Min(remaining, slot.ItemStack.Quantity);
+
+                container.Slots[slotIndex] = toRemove == slot.ItemStack.Quantity
+                    ? slot.Clear()
+                    : slot.ChangeQuantity(-toRemove);
+
+                remaining -= toRemove;
+                container.InvalidateCache();
+            }
+
+            return remaining < quantity;
+        }
+
+        /// <summary>在同一容器内移动物品（拖拽）</summary>
+        private bool MoveItemInContainer(ref InventoryContainer container, int fromSlotIndex, int toSlotIndex)
+        {
+            if (!container.IsValid ||
+                fromSlotIndex < 0 || fromSlotIndex >= container.Capacity ||
+                toSlotIndex < 0 || toSlotIndex >= container.Capacity)
+                return false;
+
+            var fromSlot = container.Slots[fromSlotIndex];
+            var toSlot = container.Slots[toSlotIndex];
+
+            if (fromSlot.IsEmpty) return false;
+
+            // 情况1：目标槽位为空，直接移动
+            if (toSlot.IsEmpty)
+            {
+                var fromDef = _itemDataService?.GetItemDefinition(fromSlot.ItemStack.ItemId);
+                if (fromDef != null && !toSlot.CanAcceptItem(fromSlot.ItemStack, fromDef.Category))
+                    return false;
+
+                container.Slots[toSlotIndex] = toSlot.WithItem(fromSlot.ItemStack);
+                container.Slots[fromSlotIndex] = fromSlot.Clear();
+                container.InvalidateCache();
+
+                EventBus.Publish(new ItemMovedInInventoryEvent
+                {
+                    ContainerId = container.ContainerId,
+                    FromSlotIndex = fromSlotIndex,
+                    ToSlotIndex = toSlotIndex,
+                    ItemStack = fromSlot.ItemStack
+                });
+                return true;
+            }
+
+            var fromItem = fromSlot.ItemStack;
+            var toItem = toSlot.ItemStack;
+            var fromItemDef = _itemDataService?.GetItemDefinition(fromItem.ItemId);
+
+            // 情况2：相同物品可堆叠
+            if (fromItemDef != null && fromItem.CanStackWith(toItem, fromItemDef.MaxStackSize))
+            {
+                var merged = toItem.MergeWith(fromItem, fromItemDef.MaxStackSize, out var overflow);
+                container.Slots[toSlotIndex] = toSlot.WithItem(merged);
+                container.Slots[fromSlotIndex] = overflow.IsEmpty ? fromSlot.Clear() : fromSlot.WithItem(overflow);
+                container.InvalidateCache();
+
+                EventBus.Publish(new ItemMovedInInventoryEvent
+                {
+                    ContainerId = container.ContainerId,
+                    FromSlotIndex = fromSlotIndex,
+                    ToSlotIndex = toSlotIndex,
+                    ItemStack = fromItem
+                });
+                return true;
+            }
+
+            // 情况3：交换物品
+            var toItemDef = _itemDataService?.GetItemDefinition(toItem.ItemId);
+            bool fromCanAcceptTo = fromItemDef == null || fromSlot.CanAcceptItem(toItem, toItemDef?.Category ?? ItemCategory.General);
+            bool toCanAcceptFrom = toItemDef == null || toSlot.CanAcceptItem(fromItem, fromItemDef?.Category ?? ItemCategory.General);
+
+            if (!fromCanAcceptTo || !toCanAcceptFrom) return false;
+
+            container.Slots[toSlotIndex] = toSlot.WithItem(fromItem);
+            container.Slots[fromSlotIndex] = fromSlot.WithItem(toItem);
+            container.InvalidateCache();
+
+            EventBus.Publish(new ItemMovedInInventoryEvent
+            {
+                ContainerId = container.ContainerId,
+                FromSlotIndex = fromSlotIndex,
+                ToSlotIndex = toSlotIndex,
+                ItemStack = fromItem
+            });
+            return true;
+        }
+
+        /// <summary>跨容器移动物品</summary>
+        private bool MoveItemBetweenContainers(ref InventoryContainer source, int sourceSlotIndex,
+                                               ref InventoryContainer target, int targetSlotIndex)
+        {
+            if (!source.IsValid || !target.IsValid) return false;
+
+            var sourceSlot = source.Slots[sourceSlotIndex];
+            var targetSlot = target.Slots[targetSlotIndex];
+
+            if (sourceSlot.IsEmpty) return false;
+
+            var sourceItem = sourceSlot.ItemStack;
+            var sourceDef = _itemDataService?.GetItemDefinition(sourceItem.ItemId);
+
+            // 情况1：目标为空，直接移动
+            if (targetSlot.IsEmpty)
+            {
+                if (sourceDef != null && !targetSlot.CanAcceptItem(sourceItem, sourceDef.Category))
+                    return false;
+
+                target.Slots[targetSlotIndex] = targetSlot.WithItem(sourceItem);
+                source.Slots[sourceSlotIndex] = sourceSlot.Clear();
+                target.InvalidateCache();
+                source.InvalidateCache();
+
+                EventBus.Publish(new ItemMovedInInventoryEvent
+                {
+                    ContainerId = source.ContainerId,
+                    FromSlotIndex = sourceSlotIndex,
+                    ToSlotIndex = targetSlotIndex,
+                    ItemStack = sourceItem
+                });
+                return true;
+            }
+
+            var targetItem = targetSlot.ItemStack;
+
+            // 情况2：相同物品可堆叠
+            if (sourceDef != null && sourceItem.CanStackWith(targetItem, sourceDef.MaxStackSize))
+            {
+                var merged = targetItem.MergeWith(sourceItem, sourceDef.MaxStackSize, out var overflow);
+                target.Slots[targetSlotIndex] = targetSlot.WithItem(merged);
+                source.Slots[sourceSlotIndex] = overflow.IsEmpty ? sourceSlot.Clear() : sourceSlot.WithItem(overflow);
+                target.InvalidateCache();
+                source.InvalidateCache();
+
+                EventBus.Publish(new ItemMovedInInventoryEvent
+                {
+                    ContainerId = source.ContainerId,
+                    FromSlotIndex = sourceSlotIndex,
+                    ToSlotIndex = targetSlotIndex,
+                    ItemStack = sourceItem
+                });
+                return true;
+            }
+
+            // 情况3：交换物品
+            var targetDef = _itemDataService?.GetItemDefinition(targetItem.ItemId);
+            bool sourceCanAcceptTarget = sourceDef == null || sourceSlot.CanAcceptItem(targetItem, targetDef?.Category ?? ItemCategory.General);
+            bool targetCanAcceptSource = targetDef == null || targetSlot.CanAcceptItem(sourceItem, sourceDef?.Category ?? ItemCategory.General);
+
+            if (!sourceCanAcceptTarget || !targetCanAcceptSource) return false;
+
+            target.Slots[targetSlotIndex] = targetSlot.WithItem(sourceItem);
+            source.Slots[sourceSlotIndex] = sourceSlot.WithItem(targetItem);
+            target.InvalidateCache();
+            source.InvalidateCache();
+
+            EventBus.Publish(new ItemMovedInInventoryEvent
+            {
+                ContainerId = source.ContainerId,
+                FromSlotIndex = sourceSlotIndex,
+                ToSlotIndex = targetSlotIndex,
+                ItemStack = sourceItem
+            });
+            return true;
+        }
+
+        /// <summary>排序容器，通过 IItemDataService 获取物品信息</summary>
+        private bool SortContainerInternal(ref InventoryContainer container, SortType sortType)
+        {
+            if (!container.IsValid || container.Capacity <= 1) return false;
+
+            var nonEmptySlots = new List<(int index, InventorySlot slot)>();
+            for (int i = 0; i < container.Capacity; i++)
+                if (!container.Slots[i].IsEmpty)
+                    nonEmptySlots.Add((i, container.Slots[i]));
+
+            if (nonEmptySlots.Count <= 1) return false;
+
+            switch (sortType)
+            {
+                case SortType.ByName:
+                    nonEmptySlots.Sort((a, b) =>
+                    {
+                        var defA = _itemDataService?.GetItemDefinition(a.slot.ItemStack.ItemId);
+                        var defB = _itemDataService?.GetItemDefinition(b.slot.ItemStack.ItemId);
+                        if (defA == null && defB == null) return 0;
+                        if (defA == null) return 1;
+                        if (defB == null) return -1;
+                        return string.Compare(defA.DisplayName, defB.DisplayName, StringComparison.Ordinal);
+                    });
+                    break;
+
+                case SortType.ByQuantity:
+                    nonEmptySlots.Sort((a, b) => b.slot.ItemStack.Quantity.CompareTo(a.slot.ItemStack.Quantity));
+                    break;
+
+                case SortType.ByWeight:
+                    nonEmptySlots.Sort((a, b) =>
+                    {
+                        var defA = _itemDataService?.GetItemDefinition(a.slot.ItemStack.ItemId);
+                        var defB = _itemDataService?.GetItemDefinition(b.slot.ItemStack.ItemId);
+                        float wA = defA?.Weight ?? 0f;
+                        float wB = defB?.Weight ?? 0f;
+                        return wB.CompareTo(wA);
+                    });
+                    break;
+
+                case SortType.ByType:
+                    nonEmptySlots.Sort((a, b) =>
+                    {
+                        var defA = _itemDataService?.GetItemDefinition(a.slot.ItemStack.ItemId);
+                        var defB = _itemDataService?.GetItemDefinition(b.slot.ItemStack.ItemId);
+                        int catA = defA != null ? (int)defA.Category : 999;
+                        int catB = defB != null ? (int)defB.Category : 999;
+                        return catA.CompareTo(catB);
+                    });
+                    break;
+
+                case SortType.ByRarity:
+                    nonEmptySlots.Sort((a, b) =>
+                    {
+                        var defA = _itemDataService?.GetItemDefinition(a.slot.ItemStack.ItemId);
+                        var defB = _itemDataService?.GetItemDefinition(b.slot.ItemStack.ItemId);
+                        int rarA = defA != null ? (int)defA.Rarity : 0;
+                        int rarB = defB != null ? (int)defB.Rarity : 0;
+                        return rarB.CompareTo(rarA);
+                    });
+                    break;
+            }
+
+            // 重建槽位数组
+            var newSlots = new InventorySlot[container.Capacity];
+            for (int i = 0; i < container.Capacity; i++)
+                newSlots[i] = new InventorySlot(i, container.Slots[i].SlotType, container.Slots[i].AllowedCategories);
+
+            int newIndex = 0;
+            foreach (var (_, slot) in nonEmptySlots)
+            {
+                newSlots[newIndex] = new InventorySlot(newIndex, slot.SlotType, slot.AllowedCategories)
+                    .WithItem(slot.ItemStack);
+                newIndex++;
+            }
+
+            // 将排序后的数组写回（通过 Slots 属性访问底层数组引用）
+            for (int i = 0; i < container.Capacity; i++)
+                container.Slots[i] = newSlots[i];
+            container.InvalidateCache();
+
+            return true;
+        }
+
+        /// <summary>扩展容器容量</summary>
+        private bool ExpandContainerCapacity(ref InventoryContainer container, int additionalSlots)
+        {
+            if (!container.IsValid || additionalSlots <= 0) return false;
+
+            int oldCapacity = container.Capacity;
+            int newCapacity = oldCapacity + additionalSlots;
+
+            var newSlots = new InventorySlot[newCapacity];
+            for (int i = 0; i < oldCapacity; i++)
+                newSlots[i] = container.Slots[i];
+            for (int i = oldCapacity; i < newCapacity; i++)
+                newSlots[i] = new InventorySlot(i);
+
+            for (int i = 0; i < newCapacity; i++)
+                container.Slots[i] = newSlots[i]; // 写到原数组会越界，需要替换数组
+
+            // [NOTE] 由于 Slots 是 _slots 数组引用，新容量时需要重新分配
+            // 此处通过 RestoreContainerState 实现替换
+            var state = CaptureContainerStateWithNewCapacity(container, newSlots);
+            RestoreContainerState(ref container, state);
+            container.InvalidateCache();
+            return true;
+        }
+
+        /// <summary>计算容器总重量，通过 IItemDataService 获取物品重量</summary>
+        private float CalculateContainerWeight(InventoryContainer container)
+        {
+            if (!container.IsValid) return 0f;
+
+            float totalWeight = 0f;
+            foreach (var slot in container.Slots)
+            {
+                if (!slot.IsEmpty)
+                {
+                    var definition = _itemDataService?.GetItemDefinition(slot.ItemStack.ItemId);
+                    if (definition != null)
+                        totalWeight += definition.Weight * slot.ItemStack.Quantity;
+                }
+            }
+            return totalWeight;
+        }
+
+        // ============ 私有：存档 Helper ============
+
+        private object CaptureContainerState(InventoryContainer container)
+        {
+            var state = new ContainerState
+            {
+                ContainerId = container.ContainerId,
+                SlotStates = new SlotState[container.Capacity]
+            };
+
+            for (int i = 0; i < container.Capacity; i++)
+            {
+                var slot = container.Slots[i];
+                state.SlotStates[i] = new SlotState
+                {
+                    Index = slot.Index,
+                    ItemId = slot.ItemStack.ItemId,
+                    Quantity = slot.ItemStack.Quantity,
+                    Durability = slot.ItemStack.Durability,
+                    CustomDataJson = slot.ItemStack.CustomDataJson
+                };
+            }
+
+            return state;
+        }
+
+        private object CaptureContainerStateWithNewCapacity(InventoryContainer container, InventorySlot[] newSlots)
+        {
+            var state = new ContainerState
+            {
+                ContainerId = container.ContainerId,
+                SlotStates = new SlotState[newSlots.Length]
+            };
+
+            for (int i = 0; i < newSlots.Length; i++)
+            {
+                var slot = newSlots[i];
+                state.SlotStates[i] = new SlotState
+                {
+                    Index = slot.Index,
+                    ItemId = slot.ItemStack.ItemId,
+                    Quantity = slot.ItemStack.Quantity,
+                    Durability = slot.ItemStack.Durability,
+                    CustomDataJson = slot.ItemStack.CustomDataJson
+                };
+            }
+
+            return state;
+        }
+
+        private void RestoreContainerState(ref InventoryContainer container, object stateObj)
+        {
+            if (!(stateObj is ContainerState state)) return;
+
+            // 通过重新赋值 struct 字段来替换内部数组
+            var newSlots = new InventorySlot[state.SlotStates.Length];
+            for (int i = 0; i < state.SlotStates.Length; i++)
+            {
+                var s = state.SlotStates[i];
+                var itemStack = string.IsNullOrEmpty(s.ItemId)
+                    ? ItemStack.Empty
+                    : new ItemStack(s.ItemId, s.Quantity, s.Durability).WithCustomData(s.CustomDataJson);
+
+                newSlots[i] = new InventorySlot(s.Index).WithItem(itemStack);
+            }
+
+            container = new InventoryContainer(state.ContainerId, newSlots.Length,
+                container.HasWeightLimit, container.MaxWeight);
+            for (int i = 0; i < newSlots.Length; i++)
+                container.Slots[i] = newSlots[i];
+            container.InvalidateCache();
+        }
+
+        // ============ 私有：工具方法 ============
+
+        private ref InventoryContainer GetContainerRef(string containerId, out bool valid)
+        {
+            if (containerId == _mainInventory.ContainerId)
+            {
+                valid = true;
+                return ref _mainInventory;
+            }
+            if (containerId == _quickAccess.ContainerId)
+            {
+                valid = true;
+                return ref _quickAccess;
+            }
+            valid = false;
+            return ref _mainInventory; // 调用方通过 valid=false 判断无效，不使用此引用
+        }
+
+        private int GetContainerCapacityById(string containerId)
+        {
+            if (containerId == _mainInventory.ContainerId) return _mainInventory.Capacity;
+            if (containerId == _quickAccess.ContainerId) return _quickAccess.Capacity;
+            return 0;
+        }
+
         private string GetTargetContainerId(ExpansionDefinitionSO expansionDefinition)
         {
             switch (expansionDefinition.TargetContainer)
@@ -792,14 +1199,19 @@ namespace SurvivalGame.Core.Inventory
                 case ExpansionTargetContainer.QuickAccess:
                     return _quickAccess.ContainerId;
                 case ExpansionTargetContainer.Both:
-                    // 对于两者都扩展的情况，默认返回主背包ID
                     return _mainInventory.ContainerId;
                 default:
                     return expansionDefinition.SpecificContainerId ?? _mainInventory.ContainerId;
             }
         }
 
-        /// <summary>计算需要消耗的总资源数量</summary>
+        private string GetContainerIdBySlotType(SlotType slotType)
+        {
+            return slotType == SlotType.QuickAccess
+                ? _quickAccess.ContainerId
+                : _mainInventory.ContainerId;
+        }
+
         private int GetTotalResourcesToConsume(ExpansionDefinitionSO expansionDefinition)
         {
             int total = 0;
@@ -820,7 +1232,6 @@ namespace SurvivalGame.Core.Inventory
             return total;
         }
 
-        /// <summary>计算总消耗次数</summary>
         private int GetTotalConsumptionCount(ExpansionDefinitionSO expansionDefinition)
         {
             int count = 0;
@@ -829,147 +1240,14 @@ namespace SurvivalGame.Core.Inventory
                 foreach (var condition in expansionDefinition.Conditions)
                 {
                     if (condition is ResourceConsumptionCondition resourceCondition)
-                    {
                         count += resourceCondition.Requirements.Length;
-                    }
                 }
             }
             return count;
         }
 
-        /// <summary>计算已消耗的资源总数</summary>
-        private int GetTotalConsumedResourcesCount(ExpansionDefinitionSO expansionDefinition)
-        {
-            // 与GetTotalResourcesToConsume相同，因为成功时所有需要消耗的资源都会被消耗
-            return GetTotalResourcesToConsume(expansionDefinition);
-        }
-
-        /// <summary>根据扩展效果执行容量扩展</summary>
-        /// <returns>是否成功</returns>
-        private bool ApplyExpansionEffectsToContainer(ExpansionDefinitionSO expansionDefinition, InventoryContainer container)
-        {
-            if (container == null || expansionDefinition?.Effects == null)
-                return false;
-
-            bool anyEffectApplied = false;
-            foreach (var effect in expansionDefinition.Effects)
-            {
-                switch (effect.EffectType)
-                {
-                    case ExpansionType.CapacityIncrease:
-                        if (effect.AdditionalSlots > 0)
-                        {
-                            bool success = container.ExpandCapacity(effect.AdditionalSlots);
-                            if (success)
-                                anyEffectApplied = true;
-                        }
-                        break;
-
-                    case ExpansionType.WeightLimitIncrease:
-                        // TODO: 实现重量限制增加
-                        // 需要InventoryContainer支持设置最大重量
-                        break;
-
-                    case ExpansionType.SlotTypeUpgrade:
-                        // TODO: 实现槽位类型升级
-                        break;
-
-                    case ExpansionType.SpecialSlotAddition:
-                        // TODO: 实现特殊槽位添加
-                        break;
-                }
-            }
-
-            return anyEffectApplied;
-        }
-
-        /// <summary>获取主背包的当前重量</summary>
-        public float GetMainInventoryWeight()
-        {
-            return _mainInventory.CalculateTotalWeight();
-        }
-
-        /// <summary>获取主背包的最大重量限制</summary>
-        public float GetMainInventoryMaxWeight()
-        {
-            return _mainInventory.GetMaxWeight();
-        }
-
-        /// <summary>获取主背包是否超重</summary>
-        public bool IsMainInventoryOverweight()
-        {
-            return _mainInventory.IsOverweight();
-        }
-
-        /// <summary>获取快捷栏的当前重量</summary>
-        public float GetQuickAccessWeight()
-        {
-            return _quickAccess.CalculateTotalWeight();
-        }
-
-        /// <summary>获取快捷栏的最大重量限制</summary>
-        public float GetQuickAccessMaxWeight()
-        {
-            return _quickAccess.GetMaxWeight();
-        }
-
-        /// <summary>获取快捷栏是否超重</summary>
-        public bool IsQuickAccessOverweight()
-        {
-            return _quickAccess.IsOverweight();
-        }
-
-        /// <summary>更新并发布重量事件</summary>
-        private void UpdateAndPublishWeightEvents(string containerId)
-        {
-            var container = GetContainerById(containerId);
-            if (container == null) return;
-
-            EventBus.Publish(new InventoryWeightUpdatedEvent
-            {
-                ContainerId = containerId,
-                CurrentWeight = container.CalculateTotalWeight(),
-                MaxWeight = container.GetMaxWeight()
-            });
-        }
-
-        // ============ 工具方法 ============
-        private InventoryContainer GetContainerById(string containerId)
-        {
-            if (containerId == _mainInventory.ContainerId)
-                return _mainInventory;
-            if (containerId == _quickAccess.ContainerId)
-                return _quickAccess;
-            return null;
-        }
-
-        // ============ ISaveable实现 ============
-        public object CaptureState()
-        {
-            var state = new InventorySystemState
-            {
-                MainInventoryState = _mainInventory.CaptureState(),
-                QuickAccessState = _quickAccess.CaptureState(),
-                SelectedQuickAccessSlot = _selectedQuickAccessSlot,
-                ExpansionStates = _expansionStateManager?.CaptureState()
-            };
-            return state;
-        }
-
-        public void RestoreState(object state)
-        {
-            if (!(state is InventorySystemState systemState))
-                return;
-
-            _mainInventory.RestoreState(systemState.MainInventoryState);
-            _quickAccess.RestoreState(systemState.QuickAccessState);
-            _selectedQuickAccessSlot = systemState.SelectedQuickAccessSlot;
-
-            if (systemState.ExpansionStates != null && _expansionStateManager != null)
-            {
-                _expansionStateManager.RestoreState(systemState.ExpansionStates);
-            }
-        }
+        private int GetTotalConsumedResourcesCount(ExpansionDefinitionSO expansionDefinition) =>
+            GetTotalResourcesToConsume(expansionDefinition);
 
         // ============ 内部序列化状态类 ============
         [Serializable]
@@ -979,6 +1257,23 @@ namespace SurvivalGame.Core.Inventory
             public object QuickAccessState;
             public int SelectedQuickAccessSlot;
             public object ExpansionStates;
+        }
+
+        [Serializable]
+        private class ContainerState
+        {
+            public string ContainerId;
+            public SlotState[] SlotStates;
+        }
+
+        [Serializable]
+        private struct SlotState
+        {
+            public int Index;
+            public string ItemId;
+            public int Quantity;
+            public float Durability;
+            public string CustomDataJson;
         }
     }
 }

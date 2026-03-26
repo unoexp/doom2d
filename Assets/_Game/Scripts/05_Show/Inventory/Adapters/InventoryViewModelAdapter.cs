@@ -2,10 +2,9 @@
 // ViewModel和数据层之间的转换器
 using System;
 using System.Collections.Generic;
-using RootsAndRuin.Data.Inventory;
-using RootsAndRuin.Core.Inventory;
+using SurvivalGame.Data.Inventory;
 
-namespace RootsAndRuin.Show.Inventory.Adapters
+namespace SurvivalGame.Show.Inventory.Adapters
 {
     /// <summary>
     /// ViewModel和数据层之间的转换器
@@ -61,25 +60,65 @@ namespace RootsAndRuin.Show.Inventory.Adapters
             return slotDataList;
         }
 
-        /// <summary>将InventorySystem状态转换为ViewModel状态</summary>
+        /// <summary>将背包系统状态转换为ViewModel状态</summary>
         public static InventoryViewModelState ConvertSystemToViewModelState(
-            InventorySystem system, bool isInventoryOpen = false)
+            IInventorySystem system, bool isInventoryOpen = false)
         {
             if (system == null)
                 return new InventoryViewModelState();
 
+            var weightInfo = system.GetWeightInfo();
             var state = new InventoryViewModelState
             {
                 IsInventoryOpen = isInventoryOpen,
                 SelectedQuickAccessSlot = system.SelectedQuickAccessSlot,
-                MainInventorySlots = ConvertContainerToSlotData(system.MainInventory, SlotType.General),
-                QuickAccessSlots = ConvertContainerToSlotData(system.QuickAccess, SlotType.QuickAccess),
-                // 计算总重量（需要遍历所有物品）
-                TotalWeight = CalculateTotalWeight(system),
+                MainInventorySlots = ConvertInventoryDataToSlotData(system.GetInventoryData()),
+                QuickAccessSlots = ConvertQuickSlotDataToSlotData(system.GetQuickSlotData()),
+                TotalWeight = weightInfo.CurrentWeight,
                 GoldAmount = 0 // TODO: 从游戏状态获取金币数量
             };
 
             return state;
+        }
+
+        /// <summary>将 InventoryData[] 转换为 SlotData 列表（通过 IInventorySystem 接口获取）</summary>
+        private static List<SlotData> ConvertInventoryDataToSlotData(InventoryData[] data)
+        {
+            var list = new List<SlotData>(data?.Length ?? 0);
+            if (data == null) return list;
+            foreach (var d in data)
+            {
+                list.Add(new SlotData
+                {
+                    SlotIndex = d.SlotIndex,
+                    SlotType = SlotType.General,
+                    Keybind = string.Empty,
+                    ItemId = d.ItemId,
+                    ItemAmount = d.Amount,
+                    ItemDurability = d.Durability
+                });
+            }
+            return list;
+        }
+
+        /// <summary>将 QuickSlotData[] 转换为 SlotData 列表（通过 IInventorySystem 接口获取）</summary>
+        private static List<SlotData> ConvertQuickSlotDataToSlotData(QuickSlotData[] data)
+        {
+            var list = new List<SlotData>(data?.Length ?? 0);
+            if (data == null) return list;
+            for (int i = 0; i < data.Length; i++)
+            {
+                list.Add(new SlotData
+                {
+                    SlotIndex = data[i].SlotIndex,
+                    SlotType = SlotType.QuickAccess,
+                    Keybind = GetQuickAccessKeybind(i),
+                    ItemId = data[i].ItemId,
+                    ItemAmount = data[i].Amount,
+                    ItemDurability = data[i].Durability
+                });
+            }
+            return list;
         }
 
         /// <summary>将UI事件转换为业务层可用的数据</summary>
@@ -101,38 +140,11 @@ namespace RootsAndRuin.Show.Inventory.Adapters
 
         // ============ 计算辅助方法 ============
 
-        /// <summary>计算背包总重量</summary>
-        private static float CalculateTotalWeight(InventorySystem system)
+        /// <summary>计算背包总重量（委托给 IInventorySystem，避免重复实现）</summary>
+        private static float CalculateTotalWeight(IInventorySystem system)
         {
-            float totalWeight = 0f;
-
-            // 计算主背包重量
-            foreach (var slot in system.MainInventory.Slots)
-            {
-                if (!slot.IsEmpty)
-                {
-                    var definition = slot.ItemStack.GetDefinition();
-                    if (definition != null)
-                    {
-                        totalWeight += definition.Weight * slot.ItemStack.Quantity;
-                    }
-                }
-            }
-
-            // 计算快捷栏重量
-            foreach (var slot in system.QuickAccess.Slots)
-            {
-                if (!slot.IsEmpty)
-                {
-                    var definition = slot.ItemStack.GetDefinition();
-                    if (definition != null)
-                    {
-                        totalWeight += definition.Weight * slot.ItemStack.Quantity;
-                    }
-                }
-            }
-
-            return totalWeight;
+            var weightInfo = system.GetWeightInfo();
+            return weightInfo.CurrentWeight;
         }
 
         /// <summary>获取快捷栏快捷键文本</summary>

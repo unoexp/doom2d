@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using SurvivalGame.Data.Inventory;
 using SurvivalGame.Data.Inventory.Expansion;
 
 /// <summary>
@@ -24,7 +25,7 @@ public class InventoryPresenter : MonoBehaviour
 
     // 拖拽状态
     private int _draggingSourceIndex = -1;
-    private SlotType _draggingSourceType = SlotType.Inventory;
+    private SlotType _draggingSourceType = SlotType.General;
 
     // 扩展系统状态
     private Dictionary<string, string> _activeExpansions = new Dictionary<string, string>(); // expansionId -> status
@@ -96,9 +97,9 @@ public class InventoryPresenter : MonoBehaviour
         EventBus.Subscribe<SlotClickedEvent>(OnSlotClicked);
         EventBus.Subscribe<SlotDragStartedEvent>(OnDragStarted);
         EventBus.Subscribe<SlotDragEndedEvent>(OnDragEnded);
-        EventBus.Subscribe<QuickSlotSelectedEvent>(OnQuickSlotSelected);
+        EventBus.Subscribe<QuickSlotSelectRequestEvent>(OnQuickSlotSelected);
         EventBus.Subscribe<InventoryToggleEvent>(OnInventoryToggle);
-        EventBus.Subscribe<InventoryFilterChangedEvent>(OnFilterChanged);
+        EventBus.Subscribe<InventoryFilterRequestEvent>(OnFilterChanged);
         EventBus.Subscribe<InventorySortChangedEvent>(OnSortChanged);
     }
 
@@ -131,9 +132,9 @@ public class InventoryPresenter : MonoBehaviour
         EventBus.Unsubscribe<SlotClickedEvent>(OnSlotClicked);
         EventBus.Unsubscribe<SlotDragStartedEvent>(OnDragStarted);
         EventBus.Unsubscribe<SlotDragEndedEvent>(OnDragEnded);
-        EventBus.Unsubscribe<QuickSlotSelectedEvent>(OnQuickSlotSelected);
+        EventBus.Unsubscribe<QuickSlotSelectRequestEvent>(OnQuickSlotSelected);
         EventBus.Unsubscribe<InventoryToggleEvent>(OnInventoryToggle);
-        EventBus.Unsubscribe<InventoryFilterChangedEvent>(OnFilterChanged);
+        EventBus.Unsubscribe<InventoryFilterRequestEvent>(OnFilterChanged);
         EventBus.Unsubscribe<InventorySortChangedEvent>(OnSortChanged);
     }
 
@@ -172,7 +173,7 @@ public class InventoryPresenter : MonoBehaviour
         {
             if (slot.ItemId == evt.ItemId)
             {
-                _viewModel.ClearSlot(slot.SlotIndex, SlotType.Inventory);
+                _viewModel.ClearSlot(slot.SlotIndex, SlotType.General);
                 break;
             }
         }
@@ -205,7 +206,7 @@ public class InventoryPresenter : MonoBehaviour
 
     private void OnPlayerGoldChanged(PlayerGoldChangedEvent evt)
     {
-        _viewModel.GoldAmount = evt.NewAmount;
+        _viewModel.GoldAmount = evt.CurrentGold;
     }
 
     // ================== UI事件处理 ==================
@@ -215,10 +216,10 @@ public class InventoryPresenter : MonoBehaviour
         if (_inventorySystem == null) return;
 
         var slotType = evt.SlotIndex < InventoryViewModel.QUICK_SLOTS
-            ? SlotType.QuickSlot
-            : SlotType.Inventory;
+            ? SlotType.QuickAccess
+            : SlotType.General;
 
-        var adjustedIndex = slotType == SlotType.QuickSlot
+        var adjustedIndex = slotType == SlotType.QuickAccess
             ? evt.SlotIndex
             : evt.SlotIndex - InventoryViewModel.QUICK_SLOTS;
 
@@ -254,18 +255,18 @@ public class InventoryPresenter : MonoBehaviour
         {
             // 执行物品移动
             var sourceType = _draggingSourceIndex < InventoryViewModel.QUICK_SLOTS
-                ? SlotType.QuickSlot
-                : SlotType.Inventory;
+                ? SlotType.QuickAccess
+                : SlotType.General;
 
             var targetType = evt.TargetSlotIndex < InventoryViewModel.QUICK_SLOTS
-                ? SlotType.QuickSlot
-                : SlotType.Inventory;
+                ? SlotType.QuickAccess
+                : SlotType.General;
 
-            var sourceIndex = sourceType == SlotType.QuickSlot
+            var sourceIndex = sourceType == SlotType.QuickAccess
                 ? _draggingSourceIndex
                 : _draggingSourceIndex - InventoryViewModel.QUICK_SLOTS;
 
-            var targetIndex = targetType == SlotType.QuickSlot
+            var targetIndex = targetType == SlotType.QuickAccess
                 ? evt.TargetSlotIndex
                 : evt.TargetSlotIndex - InventoryViewModel.QUICK_SLOTS;
 
@@ -280,14 +281,14 @@ public class InventoryPresenter : MonoBehaviour
 
         // 重置拖拽状态
         _draggingSourceIndex = -1;
-        _draggingSourceType = SlotType.Inventory;
+        _draggingSourceType = SlotType.General;
         _viewModel.DraggingSlotIndex = -1;
 
         // 结束拖拽动画
         EndDragAnimation();
     }
 
-    private void OnQuickSlotSelected(QuickSlotSelectedEvent evt)
+    private void OnQuickSlotSelected(QuickSlotSelectRequestEvent evt)
     {
         if (_inventorySystem == null) return;
 
@@ -311,7 +312,7 @@ public class InventoryPresenter : MonoBehaviour
         }
     }
 
-    private void OnFilterChanged(InventoryFilterChangedEvent evt)
+    private void OnFilterChanged(InventoryFilterRequestEvent evt)
     {
         _viewModel.CurrentFilter = evt.FilterCategory;
 
@@ -366,7 +367,7 @@ public class InventoryPresenter : MonoBehaviour
     private void HandleRightClick(int slotIndex, SlotType slotType)
     {
         // 显示上下文菜单或直接使用
-        var itemId = slotType == SlotType.QuickSlot
+        var itemId = slotType == SlotType.QuickAccess
             ? _viewModel.GetQuickSlot(slotIndex)?.ItemId
             : _viewModel.GetSlot(slotIndex)?.ItemId;
 
@@ -379,7 +380,7 @@ public class InventoryPresenter : MonoBehaviour
     private void HandleLeftClick(int slotIndex, SlotType slotType)
     {
         // 选中槽位
-        if (slotType == SlotType.QuickSlot)
+        if (slotType == SlotType.QuickAccess)
         {
             var quickSlot = _viewModel.GetQuickSlot(slotIndex);
             if (quickSlot != null)
@@ -648,86 +649,9 @@ public class InventoryPresenter : MonoBehaviour
     }
 }
 
-// ================== 支持的事件定义 ==================
+// 事件定义已迁移：
+// PlayerWeightChangedEvent / PlayerGoldChangedEvent → 02_Base/EventBus/Events/InventoryEvents.cs
+// UIFeedbackEvent / UINotificationEvent / UIContextMenuEvent / UIFilterAppliedEvent / UISortAppliedEvent
+//   → 05_Show/Inventory/Events/InventoryUIEvents.cs
 
-public struct PlayerWeightChangedEvent : IEvent
-{
-    public int CurrentWeight;
-    public int MaxWeight;
-}
-
-public struct PlayerGoldChangedEvent : IEvent
-{
-    public int NewAmount;
-}
-
-public struct UIFeedbackEvent : IEvent
-{
-    public UIFeedbackType Type;
-    public int SlotIndex;
-}
-
-public enum UIFeedbackType
-{
-    ItemAdded,
-    ItemRemoved,
-    DragStart,
-    DragEnd,
-    InventoryOpen,
-    InventoryClose,
-    ItemMove
-}
-
-public struct UINotificationEvent : IEvent
-{
-    public string Message;
-    public float Duration;
-}
-
-public struct UIContextMenuEvent : IEvent
-{
-    public int SlotIndex;
-    public SlotType SlotType;
-    public string ItemId;
-    public Vector2 ScreenPosition;
-}
-
-public struct UIFilterAppliedEvent : IEvent
-{
-    public string FilterCategory;
-}
-
-public struct UISortAppliedEvent : IEvent
-{
-    public string SortMethod;
-}
-
-/// <summary>背包系统接口（需要业务层实现）</summary>
-public interface IInventorySystem
-{
-    InventoryData[] GetInventoryData();
-    QuickSlotData[] GetQuickSlotData();
-    void MoveItem(SlotType sourceType, int sourceIndex, SlotType targetType, int targetIndex);
-    void SelectQuickSlot(int slotIndex);
-    WeightInfo GetWeightInfo();
-}
-
-public struct InventoryData
-{
-    public int SlotIndex;
-    public string ItemId;
-    public int Amount;
-}
-
-public struct QuickSlotData
-{
-    public int SlotIndex;
-    public string ItemId;
-    public int Amount;
-}
-
-public struct WeightInfo
-{
-    public int CurrentWeight;
-    public int MaxWeight;
-}
+// IInventorySystem 接口及相关数据结构定义在 02_Base/Interfaces/IInventorySystem.cs

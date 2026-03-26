@@ -171,7 +171,7 @@ namespace SurvivalGame.Data.Inventory.Expansion
                 case ExpansionType.SpecialSlotAddition:
                     if (effect.SpecialSlotCount <= 0)
                         Debug.LogWarning($"[{name}] 特殊槽位添加的数量必须大于0");
-                    if (effect.SpecialSlotType == SlotType.Default)
+                    if (effect.SpecialSlotType == SlotType.General)
                         Debug.LogWarning($"[{name}] 特殊槽位类型不应为Default");
                     break;
 

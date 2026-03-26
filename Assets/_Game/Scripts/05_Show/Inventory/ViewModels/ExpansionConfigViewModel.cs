@@ -24,11 +24,11 @@ namespace SurvivalGame.Show.Inventory
         public string DisplayName { get; private set; }
         public string Description { get; private set; }
         public string IconPath { get; private set; }
-        public Color ThemeColor { get; private set; }
+        public UnityEngine.Color ThemeColor { get; private set; }
 
         // 扩展级别
         public List<ExpansionLevelViewModel> ExpansionLevels { get; private set; } = new();
-        private readonly Dictionary<string, ExpansionLevelViewModel> _levelsById = new();
+        private Dictionary<string, ExpansionLevelViewModel> _levelsById = new();
 
         // 系统状态
         public ExpansionSystemState SystemState { get; private set; } = ExpansionSystemState.Inactive;
@@ -368,7 +368,7 @@ namespace SurvivalGame.Show.Inventory
                 DisplayName = config.DisplayName,
                 Description = config.Description,
                 IconPath = iconPath ?? GetIconPath(config),
-                ThemeColor = ConvertUnityColor(config.ThemeColor),
+                ThemeColor = config.ThemeColor,
                 MaxTotalExpansions = config.MaxTotalExpansions,
                 AllowParallelExpansion = config.AllowParallelExpansion,
                 DefaultExpansionDuration = config.ExpansionDuration
@@ -477,6 +477,52 @@ namespace SurvivalGame.Show.Inventory
 
             return true;
         }
+
+        /// <summary>
+        /// 根据ID获取扩展级别ViewModel
+        /// </summary>
+        public ExpansionLevelViewModel GetLevel(string levelId)
+        {
+            _levelsById.TryGetValue(levelId, out var level);
+            return level;
+        }
+
+        /// <summary>
+        /// 获取扩展统计信息
+        /// </summary>
+        public ExpansionStatsData GetExpansionStats()
+        {
+            return new ExpansionStatsData
+            {
+                CurrentMainSlots = 0,
+                CurrentQuickSlots = 0,
+                CompletedLevels = CompletedLevelsCount,
+                TotalLevels = TotalLevelsCount
+            };
+        }
+
+        /// <summary>
+        /// 创建默认ViewModel（用于测试和回退场景）
+        /// </summary>
+        public static ExpansionConfigViewModel CreateDefault()
+        {
+            return new ExpansionConfigViewModel
+            {
+                ExpansionId = "Default_Expansion",
+                TargetContainerId = "MainInventory",
+                DisplayName = "背包扩展",
+                Description = "扩展背包容量，增加负重上限",
+                IconPath = "UI/Icons/Expansion/Default",
+                ThemeColor = UnityEngine.Color.white,
+                MaxTotalExpansions = 5,
+                AllowParallelExpansion = false,
+                DefaultExpansionDuration = 60f,
+                SystemState = ExpansionSystemState.Idle,
+                TotalLevelsCount = 0,
+                CompletedLevelsCount = 0,
+                AvailableLevelsCount = 0
+            };
+        }
     }
 
     /// <summary>
@@ -493,25 +539,13 @@ namespace SurvivalGame.Show.Inventory
     }
 
     /// <summary>
-    /// 简单的颜色结构体
-    /// 🎨 用于UI主题颜色
+    /// 扩展统计数据
     /// </summary>
-    public struct Color
+    public struct ExpansionStatsData
     {
-        public float R { get; set; }
-        public float G { get; set; }
-        public float B { get; set; }
-        public float A { get; set; }
-
-        public static Color White => new Color { R = 1, G = 1, B = 1, A = 1 };
-        public static Color Black => new Color { R = 0, G = 0, B = 0, A = 1 };
-
-        public Color(float r, float g, float b, float a = 1)
-        {
-            R = r;
-            G = g;
-            B = b;
-            A = a;
-        }
+        public int CurrentMainSlots;
+        public int CurrentQuickSlots;
+        public int CompletedLevels;
+        public int TotalLevels;
     }
 }

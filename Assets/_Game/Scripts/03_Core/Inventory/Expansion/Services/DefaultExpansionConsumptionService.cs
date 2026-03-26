@@ -120,7 +120,7 @@ namespace SurvivalGame.Core.Inventory.Expansion
                     foreach (var condition in conditionList)
                     {
                         var validationResult = validationResults.Find(r => r.ConditionId == condition.ConditionId);
-                        string reason = validationResult?.FailedReason ?? "条件验证失败";
+                        string reason = validationResult.FailedReason ?? "条件验证失败";
                         results.Add(ExpansionConsumptionResult.FailResult(condition.ConditionId, reason));
                     }
                     return (false, results);
@@ -441,58 +441,8 @@ namespace SurvivalGame.Core.Inventory.Expansion
         }
     }
 
-    // ============ 相关事件定义 ============
-
-    /// <summary>条件消耗事件</summary>
-    public struct ExpansionConditionConsumedEvent : IEvent
-    {
-        public string ConditionId;
-        public ExpansionConditionType ConditionType;
-        public bool Success;
-        public DateTime Timestamp;
-    }
-
-    /// <summary>条件消耗失败事件</summary>
-    public struct ExpansionConditionConsumptionFailedEvent : IEvent
-    {
-        public string ConditionId;
-        public ExpansionConditionType ConditionType;
-        public string FailureReason;
-        public DateTime Timestamp;
-    }
-
-    /// <summary>批量消耗开始事件</summary>
-    public struct ExpansionBatchConsumptionStartedEvent : IEvent
-    {
-        public string ExpansionId;
-        public int TotalConditions;
-        public bool BatchMode;
-    }
-
-    /// <summary>批量消耗完成事件</summary>
-    public struct ExpansionBatchConsumptionCompletedEvent : IEvent
-    {
-        public string ExpansionId;
-        public int TotalConditions;
-        public int SucceededConditions;
-        public int FailedConditions;
-        public bool BatchMode;
-        public float AverageQueueTime;
-    }
-
-    /// <summary>消耗回滚事件</summary>
-    public struct ExpansionConsumptionRollbackEvent : IEvent
-    {
-        public string ConditionId;
-        public ExpansionConditionType ConditionType;
-        public ExpansionConsumptionResult OriginalResult;
-        public DateTime RollbackTime;
-    }
-
-    /// <summary>消耗队列清空事件</summary>
-    public struct ExpansionConsumptionQueueClearedEvent : IEvent
-    {
-        public int ClearedCount;
-        public DateTime Timestamp;
-    }
+    // 相关事件定义已移至：02_Base/EventBus/Events/InventoryExpansionEvents.cs
+    // ExpansionConditionConsumedEvent / ExpansionConditionConsumptionFailedEvent /
+    // ExpansionBatchConsumptionStartedEvent / ExpansionBatchConsumptionCompletedEvent /
+    // ExpansionConsumptionRollbackEvent / ExpansionConsumptionQueueClearedEvent
 }

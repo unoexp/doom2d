@@ -2,6 +2,7 @@
 // ⚠️ 纯C#类，无Unity依赖
 
 using System;
+using SurvivalGame.Data.Inventory;
 
 /// <summary>
 /// 槽位ViewModel，单个槽位的数据容器
@@ -247,22 +248,5 @@ public class SlotViewModel
     }
 }
 
-/// <summary>物品数据服务接口（需要业务层实现）</summary>
-public interface IItemDataService
-{
-    ItemDefinitionSO GetItemDefinition(string itemId);
-}
-
-/// <summary>UI配置服务接口</summary>
-public interface IUIConfigService
-{
-    InventoryUIConfigSO GetInventoryConfig();
-}
-
-// 物品类型引用（需要根据实际项目调整）
-// 这些类应该定义在01_Data层
-public class ConsumableItemSO { }
-public class ToolItemSO { }
-public class WeaponItemSO { }
-public class ArmorItemSO { }
-public class MaterialItemSO { }
+// IItemDataService 和 IUIConfigService 接口定义在 02_Base/Interfaces/
+// 物品子类定义在 01_Data/ScriptableObjects/Items/ 下

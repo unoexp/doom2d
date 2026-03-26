@@ -84,7 +84,7 @@ namespace SurvivalGame.Core.Inventory.Expansion
     /// 扩展状态管理器
     /// 🏗️ 架构说明：核心业务层组件，管理所有背包扩展的状态
     /// </summary>
-    public class ExpansionStateManager : ISaveable
+    public class ExpansionStateManager : ISaveable, IExpansionRecordService
     {
         private Dictionary<string, ExpansionStateData> _expansionStates;
         private Dictionary<string, List<ExpansionStateData>> _containerExpansions;
@@ -249,6 +249,27 @@ namespace SurvivalGame.Core.Inventory.Expansion
         {
             var state = GetOrCreateExpansionState(expansionId, "unknown");
             state.MaxLevel = maxLevel;
+        }
+
+        // ============ IExpansionRecordService 接口实现 ============
+
+        /// <summary>记录扩展完成（接口方法，使用默认容器和无冷却）</summary>
+        void IExpansionRecordService.RecordExpansionCompleted(string expansionId)
+        {
+            RecordExpansionCompleted(expansionId, "", 0f);
+        }
+
+        /// <summary>获取扩展完成次数</summary>
+        public int GetExpansionCompletedCount(string expansionId)
+        {
+            var state = GetExpansionState(expansionId);
+            return state?.CompletionCount ?? 0;
+        }
+
+        /// <summary>获取所有已完成的扩展ID列表（IExpansionRecordService接口）</summary>
+        public IReadOnlyList<string> GetCompletedExpansions()
+        {
+            return GetCompletedExpansionIds();
         }
     }
 }
