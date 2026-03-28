@@ -121,8 +121,11 @@ public class SaveLoadSystem : MonoBehaviour
             // 序列化为 JSON
             string json = SaveSerializer.Serialize(stateMap);
 
-            // 写入文件
+            // 写入文件（确保目录存在）
             string filePath = GetSaveFilePath(slotIndex);
+            string dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
             File.WriteAllText(filePath, json);
 
             Debug.Log($"[SaveLoadSystem] 存档成功 → {filePath}（{_saveables.Count} 个系统）");
