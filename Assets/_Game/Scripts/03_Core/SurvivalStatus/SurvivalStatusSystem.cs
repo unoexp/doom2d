@@ -436,8 +436,8 @@ public class SurvivalStatusSystem : MonoBehaviour, ISaveable
 
         foreach (var kv in _attributes)
         {
-            data.AttributeValues[kv.Key] = kv.Value.CurrentValue;
-            data.AttributeMaxValues[kv.Key] = kv.Value.MaxValue;
+            data.AttributeValues.Add(new SurvivalAttributeEntry(kv.Key, kv.Value.CurrentValue));
+            data.AttributeMaxValues.Add(new SurvivalAttributeEntry(kv.Key, kv.Value.MaxValue));
         }
 
         // 持久化永久状态效果（Duration == -1），临时效果不存档
@@ -452,15 +452,26 @@ public class SurvivalStatusSystem : MonoBehaviour, ISaveable
 
     public void RestoreState(object state)
     {
-        if (state is not SurvivalSaveData data) return;
+        // SaveLoadSystem 传入的是 JSON 字符串
+        SurvivalSaveData data;
+        if (state is string json)
+            data = UnityEngine.JsonUtility.FromJson<SurvivalSaveData>(json);
+        else if (state is SurvivalSaveData directData)
+            data = directData;
+        else
+            return;
 
-        foreach (var kv in data.AttributeValues)
-            SetValue(kv.Key, kv.Value);
-
-        foreach (var kv in data.AttributeMaxValues)
+        for (int i = 0; i < data.AttributeValues.Count; i++)
         {
-            if (_attributes.TryGetValue(kv.Key, out var attr))
-                attr.SetMax(kv.Value);
+            var entry = data.AttributeValues[i];
+            SetValue(entry.Type, entry.Value);
+        }
+
+        for (int i = 0; i < data.AttributeMaxValues.Count; i++)
+        {
+            var entry = data.AttributeMaxValues[i];
+            if (_attributes.TryGetValue(entry.Type, out var attr))
+                attr.SetMax(entry.Value);
         }
         // 永久效果由 SaveLoadSystem 统一重建，此处不处理
     }
