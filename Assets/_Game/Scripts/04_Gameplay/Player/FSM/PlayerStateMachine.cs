@@ -41,6 +41,8 @@ public class PlayerStateMachine
         _fsm.AddState(PlayerState.Run,    new PlayerRunState(player, this));
         _fsm.AddState(PlayerState.Jump,   new PlayerJumpState(player, this));
         _fsm.AddState(PlayerState.Fall,   new PlayerFallState(player, this));
+        _fsm.AddState(PlayerState.Attack, new PlayerAttackState(player, this));
+        _fsm.AddState(PlayerState.Dodge,  new PlayerDodgeState(player, this));
         _fsm.AddState(PlayerState.Dead,   new PlayerDeadState(player, this));
 
         // 监听状态变更

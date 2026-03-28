@@ -16,6 +16,8 @@ public class PlayerIdleState : PlayerStateBase
     {
         // 状态转移检测
         if (Player.IsDead) { FSM.ChangeState(PlayerState.Dead); return; }
+        if (Player.AttackRequested) { FSM.ChangeState(PlayerState.Attack); return; }
+        if (Player.DodgeRequested) { FSM.ChangeState(PlayerState.Dodge); return; }
         if (Player.JumpRequested && Player.IsGrounded) { FSM.ChangeState(PlayerState.Jump); return; }
         if (!Player.IsGrounded) { FSM.ChangeState(PlayerState.Fall); return; }
 

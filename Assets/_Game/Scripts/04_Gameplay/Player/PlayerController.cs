@@ -56,6 +56,8 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     private Vector2 _moveInput;
     private bool _jumpRequested;
+    private bool _attackRequested;
+    private bool _dodgeRequested;
     private bool _runHeld;
     private bool _inputEnabled = true;
 
@@ -74,7 +76,10 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     public Vector2 MoveInput => _moveInput;
     public bool JumpRequested => _jumpRequested;
+    public bool AttackRequested => _attackRequested;
+    public bool DodgeRequested => _dodgeRequested;
     public bool IsRunning => _runHeld;
+    public Transform Transform => transform;
     public bool IsGrounded => _isGrounded;
     public bool IsDead => _isDead;
     public bool FacingRight => _facingRight;
@@ -135,8 +140,10 @@ public class PlayerController : MonoBehaviour, IDamageable
         ReadInput();
         _fsm.Update(Time.deltaTime);
 
-        // 消费跳跃输入（每帧只触发一次）
+        // 消费一次性输入
         _jumpRequested = false;
+        _attackRequested = false;
+        _dodgeRequested = false;
     }
 
     private void FixedUpdate()
@@ -238,6 +245,12 @@ public class PlayerController : MonoBehaviour, IDamageable
 
         if (Input.GetKeyDown(KeyCode.Space))
             _jumpRequested = true;
+
+        if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.J))
+            _attackRequested = true;
+
+        if (Input.GetKeyDown(KeyCode.LeftControl) || Input.GetKeyDown(KeyCode.K))
+            _dodgeRequested = true;
 
         // 交互键
         if (Input.GetKeyDown(KeyCode.E))
