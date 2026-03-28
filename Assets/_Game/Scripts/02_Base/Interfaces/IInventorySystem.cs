@@ -15,6 +15,7 @@ public interface IInventorySystem
     void SelectQuickSlot(int slotIndex);
     WeightInfo GetWeightInfo();
     int GetTotalItemCount(string itemId);
+    bool TryAddItem(string itemId, int quantity);
     bool TryRemoveItem(string itemId, int quantity);
     int SelectedQuickAccessSlot { get; }
 }

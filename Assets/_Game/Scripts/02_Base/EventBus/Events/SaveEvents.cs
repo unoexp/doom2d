@@ -28,3 +28,6 @@ public struct LoadCompletedEvent : IEvent
     public int SlotIndex;
     public bool Success;
 }
+
+/// <summary>读档请求事件（UI发起，加载最近存档）</summary>
+public struct LoadGameRequestEvent : IEvent { }
