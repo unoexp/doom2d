@@ -26,9 +26,6 @@ public class PlayerController : MonoBehaviour, IDamageable
     // 配置
     // ══════════════════════════════════════════════════════
 
-    [Header("生命值")]
-    [SerializeField] private float _maxHealth = 100f;
-
     [Header("移动参数")]
     [SerializeField] private float _walkSpeed = 4f;
     [SerializeField] private float _runSpeed = 7f;
@@ -49,6 +46,7 @@ public class PlayerController : MonoBehaviour, IDamageable
     private Rigidbody2D _rb;
     private Animator _animator;
     private PlayerStateMachine _fsm;
+    private SurvivalStatusSystem _survivalStatus;
 
     // ══════════════════════════════════════════════════════
     // 输入状态
@@ -65,7 +63,6 @@ public class PlayerController : MonoBehaviour, IDamageable
     // 运行时状态
     // ══════════════════════════════════════════════════════
 
-    private float _currentHealth;
     private bool _isGrounded;
     private bool _isDead;
     private bool _facingRight = true;
@@ -98,8 +95,10 @@ public class PlayerController : MonoBehaviour, IDamageable
     // IDamageable 实现
     // ══════════════════════════════════════════════════════
 
-    float IDamageable.CurrentHealth => _currentHealth;
-    float IDamageable.MaxHealth => _maxHealth;
+    float IDamageable.CurrentHealth => _survivalStatus != null
+        ? _survivalStatus.GetValue(SurvivalAttributeType.Health) : 0f;
+    float IDamageable.MaxHealth => _survivalStatus != null
+        ? _survivalStatus.GetMaxValue(SurvivalAttributeType.Health) : 0f;
     bool IDamageable.IsDead => _isDead;
     Transform IDamageable.Transform => transform;
 
@@ -120,7 +119,7 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     private void Start()
     {
-        _currentHealth = _maxHealth;
+        _survivalStatus = ServiceLocator.Get<SurvivalStatusSystem>();
         _fsm.Initialize(PlayerState.Idle);
 
         // 设置交互系统的交互者
@@ -230,26 +229,21 @@ public class PlayerController : MonoBehaviour, IDamageable
     {
         if (_isDead || _isInvincible) return;
 
-        _currentHealth -= info.Damage;
-        _currentHealth = Mathf.Max(0f, _currentHealth);
+        // 委托给 SurvivalStatusSystem 统一管理生命值
+        // SurvivalStatusSystem.CheckCriticalThresholds() 负责死亡判定
+        _survivalStatus?.ModifyAttribute(SurvivalAttributeType.Health, -info.Damage);
 
         // 击退
         if (info.KnockbackForce > 0f && _rb != null)
         {
             _rb.AddForce(info.KnockbackDirection * info.KnockbackForce, ForceMode2D.Impulse);
         }
-
-        if (_currentHealth <= 0f)
-        {
-            _isDead = true;
-            EventBus.Publish(new PlayerDeadEvent { Cause = DeathCause.Combat });
-        }
     }
 
     public void Heal(float amount)
     {
         if (_isDead) return;
-        _currentHealth = Mathf.Min(_currentHealth + amount, _maxHealth);
+        _survivalStatus?.ModifyAttribute(SurvivalAttributeType.Health, amount);
     }
 
     // ══════════════════════════════════════════════════════

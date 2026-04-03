@@ -29,6 +29,7 @@ public class EquipmentSystem : MonoBehaviour, ISaveable
         = new Dictionary<EquipmentSlot, string>();
 
     private IItemDataService _itemDataService;
+    private IInventorySystem _inventorySystem;
 
     // ══════════════════════════════════════════════════════
     // 属性
@@ -67,6 +68,7 @@ public class EquipmentSystem : MonoBehaviour, ISaveable
     private void Start()
     {
         _itemDataService = ServiceLocator.Get<IItemDataService>();
+        _inventorySystem = ServiceLocator.Get<IInventorySystem>();
 
         // 注册到存档系统
         if (ServiceLocator.TryGet<SaveLoadSystem>(out var saveSystem))
@@ -96,7 +98,11 @@ public class EquipmentSystem : MonoBehaviour, ISaveable
         if (slot == EquipmentSlot.None) return false;
         if (string.IsNullOrEmpty(itemId)) return false;
 
-        // 先卸下旧装备
+        // 先从背包移除物品（确认拥有该物品）
+        if (!_inventorySystem.TryRemoveItem(itemId, 1))
+            return false;
+
+        // 卸下旧装备（会归还到背包）
         if (!string.IsNullOrEmpty(_equippedItems[slot]))
             Unequip(slot);
 
@@ -120,6 +126,9 @@ public class EquipmentSystem : MonoBehaviour, ISaveable
 
         _equippedItems[slot] = string.Empty;
         RecalculateStats();
+
+        // 归还物品到背包
+        _inventorySystem.TryAddItem(itemId, 1);
 
         EventBus.Publish(new ItemUnequippedEvent { Slot = slot, PreviousItemId = itemId });
         return itemId;
