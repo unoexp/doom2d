@@ -279,3 +279,100 @@ public enum AudioGroup
     UI              = 4,    // UI 音效
     Voice           = 5,    // 人物语音
 }
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 技能类型。用于 SkillSystem 管理各技能的熟练度。
+/// </summary>
+public enum SkillType
+{
+    Mining          = 0,    // 挖掘
+    Combat          = 1,    // 战斗
+    Crafting        = 2,    // 制作
+    Cooking         = 3,    // 烹饪
+    Gathering       = 4,    // 采集
+    Survival        = 5,    // 生存
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 成就条件类型。用于 AchievementSystem 判断触发条件。
+/// </summary>
+public enum AchievementConditionType
+{
+    SurviveTime     = 0,    // 存活指定时长
+    NoDeath         = 1,    // 无死亡通关
+    TripleCrisis    = 2,    // 三重危机中存活
+    BuildStructure  = 3,    // 建造指定建筑
+    ReachLayer      = 4,    // 到达指定地层
+    DiscoverAllPOI  = 5,    // 发现所有地表POI
+    CollectAllLore  = 6,    // 收集所有叙事物品
+    DefeatEnemy     = 7,    // 首次击败敌人
+    DefeatBoss      = 8,    // 击败指定BOSS
+    PacifistRun     = 9,    // 不杀敌通关
+    NPCTrustMax     = 10,   // NPC信任度满
+    QuestComplete   = 11,   // 完成指定任务
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 兴趣点类型。用于 POIManager 管理地表兴趣点。
+/// </summary>
+public enum POIType
+{
+    None            = 0,
+    AbandonedCamp   = 1,    // 废弃营地
+    HunterCabin     = 2,    // 猎人小屋
+    IceLake         = 3,    // 冰湖
+    TraderStop      = 4,    // 商人停靠站
+    RootEmergence   = 5,    // 根脉涌出点
+    MineEntrance    = 6,    // 矿井入口
+    Ruins           = 7,    // 废墟
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 教学触发类型。用于 TutorialSystem 管理首次触发提示。
+/// </summary>
+public enum TutorialTrigger
+{
+    FirstPickup     = 0,    // 首次拾取物品
+    FirstInventory  = 1,    // 首次打开背包
+    HungerWarning   = 2,    // 饥饿警告
+    ColdWarning     = 3,    // 寒冷警告
+    FirstCombat     = 4,    // 首次遇敌
+    FirstDeath      = 5,    // 首次死亡
+    FirstCraft      = 6,    // 首次制作
+    FirstBuild      = 7,    // 首次建造
+    FirstDig        = 8,    // 首次挖掘
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 永久发现物效果类型。用于 DiscoverySystem 管理永久被动加成。
+/// </summary>
+public enum DiscoveryEffectType
+{
+    MoveSpeedBonus      = 0,    // 移速加成
+    WeaponDamageBonus   = 1,    // 武器伤害加成
+    BlockBonus          = 2,    // 格挡减伤加成
+    EquipmentBonus      = 3,    // 装备效果加成
+    ShelterRecovery     = 4,    // 庇护所内恢复加成
+    DecayReduction      = 5,    // 属性衰减减缓
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 玩家攻击类型。用于战斗系统区分轻击/重击。
+/// </summary>
+public enum AttackType
+{
+    Light           = 0,    // 轻击
+    Heavy           = 1,    // 重击
+}

@@ -173,8 +173,20 @@ public class CraftingSystem : MonoBehaviour, ICraftingSystem
             _inventorySystem.TryRemoveItem(ingredient.Item.ItemId, ingredient.Amount);
         }
 
-        // 产出物品 — 通过 EventBus 通知背包系统添加
-        // 注意：实际添加物品由 InventorySystem 处理 ItemAddedToInventoryEvent
+        // 产出物品 — 直接调用背包系统添加
+        if (!_inventorySystem.TryAddItem(recipe.OutputItem.ItemId, recipe.OutputAmount))
+        {
+            // 背包已满，回滚消耗的材料
+            for (int i = 0; i < recipe.Ingredients.Length; i++)
+            {
+                var ingredient = recipe.Ingredients[i];
+                if (ingredient.Item == null) continue;
+                _inventorySystem.TryAddItem(ingredient.Item.ItemId, ingredient.Amount);
+            }
+            PublishResult(recipeId, CraftingResult.Failed_Overloaded, null, 0);
+            return CraftingResult.Failed_Overloaded;
+        }
+
         PublishResult(recipeId, CraftingResult.Success,
                       recipe.OutputItem.ItemId, recipe.OutputAmount);
 

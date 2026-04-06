@@ -5,26 +5,6 @@
 using UnityEngine;
 
 /// <summary>
-/// 物品Tooltip悬停请求事件。UI槽位在鼠标悬停时发布。
-/// </summary>
-public struct ItemTooltipRequestEvent : IEvent
-{
-    /// <summary>物品ID（空字符串表示隐藏Tooltip）</summary>
-    public string ItemId;
-
-    /// <summary>当前堆叠数量</summary>
-    public int StackSize;
-
-    /// <summary>当前耐久度（无耐久度时为 -1）</summary>
-    public float CurrentDurability;
-}
-
-/// <summary>
-/// 物品Tooltip隐藏事件。鼠标离开槽位时发布。
-/// </summary>
-public struct ItemTooltipHideEvent : IEvent { }
-
-/// <summary>
 /// 物品Tooltip Presenter。
 ///
 /// 核心职责：
