@@ -94,6 +94,13 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
 
     protected override void OnDestroy()
     {
+        // 注销ServiceLocator注册
+        ServiceLocator.Unregister<IResourceLoader>();
+        ServiceLocator.Unregister<IAssetBundleLoader>();
+
+        // 取消EventBus订阅
+        EventBus.Unsubscribe<MemoryWarningEvent>(OnMemoryWarning);
+
         // 清理所有正在进行的操作
         CleanupAllOperations();
 

@@ -21,7 +21,7 @@ using UnityEngine;
 ///   · 运行时通过 IInventorySystem 查询/消耗材料
 ///   · 制作结果通过 CraftingResultEvent 广播，UI 层订阅显示
 /// </summary>
-public class CraftingSystem : MonoBehaviour
+public class CraftingSystem : MonoBehaviour, ICraftingSystem
 {
     // ══════════════════════════════════════════════════════
     // 配置
@@ -51,6 +51,7 @@ public class CraftingSystem : MonoBehaviour
     private void Awake()
     {
         ServiceLocator.Register<CraftingSystem>(this);
+        ServiceLocator.Register<ICraftingSystem>(this);
 
         // 构建配方查找表
         if (_recipes != null)
@@ -87,6 +88,7 @@ public class CraftingSystem : MonoBehaviour
     private void OnDestroy()
     {
         ServiceLocator.Unregister<CraftingSystem>();
+        ServiceLocator.Unregister<ICraftingSystem>();
     }
 
     // ══════════════════════════════════════════════════════

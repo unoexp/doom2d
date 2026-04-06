@@ -10,7 +10,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class SurvivalStatusSystem : MonoBehaviour, ISaveable
+public class SurvivalStatusSystem : MonoBehaviour, ISaveable, ISurvivalStatusSystem
 {
     // ══════════════════════════════════════════════════════
     // 字段
@@ -46,11 +46,13 @@ public class SurvivalStatusSystem : MonoBehaviour, ISaveable
     {
         InitializeAttributes();
         ServiceLocator.Register<SurvivalStatusSystem>(this);
+        ServiceLocator.Register<ISurvivalStatusSystem>(this);
     }
 
     private void OnDestroy()
     {
         ServiceLocator.Unregister<SurvivalStatusSystem>();
+        ServiceLocator.Unregister<ISurvivalStatusSystem>();
     }
 
     private void Update()

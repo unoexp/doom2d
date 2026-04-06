@@ -62,6 +62,7 @@ namespace SurvivalGame.Core.Inventory
         {
             ServiceLocator.Unregister<InventorySystem>();
             ServiceLocator.Unregister<IInventorySystem>();
+            ServiceLocator.Unregister<IExpansionRecordService>();
         }
 
         // ============ 初始化 ============

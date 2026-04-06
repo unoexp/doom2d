@@ -30,7 +30,7 @@ public class TradeItemRuntime
 ///   · 运行时库存通过 TradeItemRuntime 管理
 ///   · 通过 ICurrencySystem 管理金币，IInventorySystem 管理物品
 /// </summary>
-public class TradingSystem : MonoBehaviour
+public class TradingSystem : MonoBehaviour, ITradingSystem
 {
     // ══════════════════════════════════════════════════════
     // 配置
@@ -61,6 +61,7 @@ public class TradingSystem : MonoBehaviour
     private void Awake()
     {
         ServiceLocator.Register<TradingSystem>(this);
+        ServiceLocator.Register<ITradingSystem>(this);
 
         if (_tradeOffers != null)
         {
@@ -95,6 +96,7 @@ public class TradingSystem : MonoBehaviour
     private void OnDestroy()
     {
         ServiceLocator.Unregister<TradingSystem>();
+        ServiceLocator.Unregister<ITradingSystem>();
     }
 
     // ══════════════════════════════════════════════════════

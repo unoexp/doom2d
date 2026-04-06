@@ -20,7 +20,7 @@ using UnityEngine;
 ///   · 建造请求通过 EventBus（UI 发起）或直接 API 调用
 ///   · 庇护所阶段根据已建造的功能模块数量自动计算
 /// </summary>
-public class BuildingSystem : MonoBehaviour, ISaveable
+public class BuildingSystem : MonoBehaviour, ISaveable, IBuildingSystem
 {
     // ══════════════════════════════════════════════════════
     // 配置
@@ -68,6 +68,7 @@ public class BuildingSystem : MonoBehaviour, ISaveable
     private void Awake()
     {
         ServiceLocator.Register<BuildingSystem>(this);
+        ServiceLocator.Register<IBuildingSystem>(this);
 
         // 构建查找表
         if (_buildingDefinitions != null)
@@ -102,6 +103,7 @@ public class BuildingSystem : MonoBehaviour, ISaveable
     private void OnDestroy()
     {
         ServiceLocator.Unregister<BuildingSystem>();
+        ServiceLocator.Unregister<IBuildingSystem>();
     }
 
     // ══════════════════════════════════════════════════════

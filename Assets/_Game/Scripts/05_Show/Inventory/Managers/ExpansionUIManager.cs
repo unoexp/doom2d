@@ -37,6 +37,8 @@ namespace SurvivalGame.Show.Inventory.Managers
         private ExpansionConfigViewModel _currentViewModel;
         private bool _isPanelOpen = false;
         private bool _isPanelAnimating = false;
+        private TimerHandle _openAnimTimerHandle;
+        private TimerHandle _closeAnimTimerHandle;
 
         // ============ 事件 ============
         public event Action<string> OnExpansionRequested;      // 请求执行扩展
@@ -71,6 +73,10 @@ namespace SurvivalGame.Show.Inventory.Managers
 
         private void OnDestroy()
         {
+            // 取消Timer
+            TimerSystem.Instance?.CancelTimer(_openAnimTimerHandle);
+            TimerSystem.Instance?.CancelTimer(_closeAnimTimerHandle);
+
             // 清理事件订阅
             if (_expansionPanel != null)
             {
@@ -336,8 +342,9 @@ namespace SurvivalGame.Show.Inventory.Managers
         private void StartPanelOpenAnimation()
         {
             // TODO: 实现面板打开动画（如渐入、滑动等）
-            // 这里暂时用简单的延迟模拟
-            Invoke(nameof(FinishPanelOpenAnimation), _panelOpenDuration);
+            // 使用TimerSystem替代Invoke
+            _openAnimTimerHandle = TimerSystem.Instance.CreateTimer(
+                _panelOpenDuration, FinishPanelOpenAnimation);
         }
 
         /// <summary>
@@ -356,7 +363,8 @@ namespace SurvivalGame.Show.Inventory.Managers
         private void StartPanelCloseAnimation()
         {
             // TODO: 实现面板关闭动画
-            Invoke(nameof(FinishPanelCloseAnimation), _panelCloseDuration);
+            _closeAnimTimerHandle = TimerSystem.Instance.CreateTimer(
+                _panelCloseDuration, FinishPanelCloseAnimation);
         }
 
         /// <summary>

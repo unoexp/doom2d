@@ -43,7 +43,7 @@ public class QuestRuntimeData
 ///   · 通过 QuestProgressCheckEvent 接收进度推送
 ///   · 同时自动订阅 ItemAddedToInventoryEvent、BuildCompletedEvent 等
 /// </summary>
-public class QuestSystem : MonoBehaviour, ISaveable
+public class QuestSystem : MonoBehaviour, ISaveable, IQuestSystem
 {
     // ══════════════════════════════════════════════════════
     // 配置
@@ -79,6 +79,7 @@ public class QuestSystem : MonoBehaviour, ISaveable
     private void Awake()
     {
         ServiceLocator.Register<QuestSystem>(this);
+        ServiceLocator.Register<IQuestSystem>(this);
 
         // 构建查找表
         if (_questDefinitions != null)
@@ -136,6 +137,7 @@ public class QuestSystem : MonoBehaviour, ISaveable
     private void OnDestroy()
     {
         ServiceLocator.Unregister<QuestSystem>();
+        ServiceLocator.Unregister<IQuestSystem>();
     }
 
     // ══════════════════════════════════════════════════════
