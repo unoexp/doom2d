@@ -95,6 +95,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     protected override void OnDestroy()
     {
         // 注销ServiceLocator注册
+        ServiceLocator.Unregister<ResourceManager>();
         ServiceLocator.Unregister<IResourceLoader>();
         ServiceLocator.Unregister<IAssetBundleLoader>();
 
@@ -143,6 +144,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// </summary>
     private void RegisterServices()
     {
+        ServiceLocator.Register<ResourceManager>(this);
         ServiceLocator.Register<IResourceLoader>(this);
         ServiceLocator.Register<IAssetBundleLoader>(this);
         Log("[ResourceManager] 服务已注册到ServiceLocator");

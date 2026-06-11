@@ -51,7 +51,6 @@ public class SkillPresenter : MonoBehaviour
     {
         if (_skillSystem == null) return;
 
-        var allDefs = _skillSystem.GetAllRecipes(); // 无此方法，需从配置获取
         var list = new List<SkillDisplayData>();
 
         // 遍历所有已知技能类型

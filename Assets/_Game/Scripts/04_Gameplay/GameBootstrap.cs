@@ -2,6 +2,7 @@
 // 📁 Assets/_Game/04_Gameplay/GameBootstrap.cs
 // 游戏初始化引导器。确保所有系统按正确顺序启动。
 // ══════════════════════════════════════════════════════════════════════
+using SurvivalGame.Core.Inventory.Expansion;
 using UnityEngine;
 
 /// <summary>
@@ -63,8 +64,10 @@ public class GameBootstrap : MonoBehaviour
         // ── 阶段2：所有 MonoBehaviour 的 Awake 已执行 ──
         // 此时 ServiceLocator 中所有系统已注册
 
-        // 验证关键系统
-        ValidateCriticalSystems();
+        Debug.Log("[Bootstrap] ========== 系统初始化摘要 ==========");
+
+        // 验证所有系统并输出日志
+        ValidateAllSystems();
 
         // ── 阶段3：加载存档（如果需要） ──
         if (_loadSaveOnStart)
@@ -79,7 +82,7 @@ public class GameBootstrap : MonoBehaviour
             NewState = GameState.GamePlay
         });
 
-        Debug.Log("[Bootstrap] 初始化完成，游戏开始");
+        Debug.Log("[Bootstrap] ========== 初始化完成，游戏开始 ==========");
     }
 
     private void OnDestroy()
@@ -95,20 +98,64 @@ public class GameBootstrap : MonoBehaviour
     // 内部方法
     // ══════════════════════════════════════════════════════
 
-    /// <summary>验证关键系统是否正确注册</summary>
-    private void ValidateCriticalSystems()
+    /// <summary>验证所有系统注册状态并输出日志</summary>
+    private void ValidateAllSystems()
     {
-        CheckSystem<SurvivalStatusSystem>("SurvivalStatusSystem");
-        CheckSystem<IInventorySystem>("IInventorySystem");
-        CheckSystem<CombatSystem>("CombatSystem");
-        CheckSystem<UIManager>("UIManager");
+        int registered = 0;
+        int total = 0;
+
+        Debug.Log("[Bootstrap] ── MonoSingletons ──");
+        registered += CheckAndLog<GameStateManager>("GameStateManager", ref total);
+        registered += CheckAndLog<TimerSystem>("TimerSystem", ref total);
+        registered += CheckAndLog<ResourceManager>("ResourceManager", ref total);
+        registered += CheckAndLog<ObjectPoolManager>("ObjectPoolManager", ref total);
+        registered += CheckAndLog<AudioManager>("AudioManager", ref total);
+        registered += CheckAndLog<UIManager>("UIManager", ref total);
+        registered += CheckAndLog<VFXManager>("VFXManager", ref total);
+
+        Debug.Log("[Bootstrap] ── Core Systems ──");
+        registered += CheckAndLog<SurvivalStatusSystem>("SurvivalStatusSystem", ref total);
+        registered += CheckAndLog<IInventorySystem>("IInventorySystem", ref total);
+        registered += CheckAndLog<IItemDataService>("IItemDataService", ref total);
+        registered += CheckAndLog<CraftingSystem>("CraftingSystem", ref total);
+        registered += CheckAndLog<BuildingSystem>("BuildingSystem", ref total);
+        registered += CheckAndLog<EquipmentSystem>("EquipmentSystem", ref total);
+        registered += CheckAndLog<CurrencySystem>("CurrencySystem", ref total);
+        registered += CheckAndLog<TradingSystem>("TradingSystem", ref total);
+        registered += CheckAndLog<QuestSystem>("QuestSystem", ref total);
+        registered += CheckAndLog<InteractionSystem>("InteractionSystem", ref total);
+        registered += CheckAndLog<DifficultySystem>("DifficultySystem", ref total);
+        registered += CheckAndLog<SkillSystem>("SkillSystem", ref total);
+        registered += CheckAndLog<AchievementSystem>("AchievementSystem", ref total);
+        registered += CheckAndLog<DiscoverySystem>("DiscoverySystem", ref total);
+        registered += CheckAndLog<NPCRelationshipSystem>("NPCRelationshipSystem", ref total);
+        registered += CheckAndLog<SaveLoadSystem>("SaveLoadSystem", ref total);
+        registered += CheckAndLog<SpawnManager>("SpawnManager", ref total);
+
+        Debug.Log("[Bootstrap] ── Expansion Services ──");
+        registered += CheckAndLog<IExpansionEffectService>("IExpansionEffectService", ref total);
+        registered += CheckAndLog<IExpansionValidationService>("IExpansionValidationService", ref total);
+        registered += CheckAndLog<IExpansionConsumptionService>("IExpansionConsumptionService", ref total);
+
+        Debug.Log("[Bootstrap] ── Gameplay ──");
+        registered += CheckAndLog<CombatSystem>("CombatSystem", ref total);
+        registered += CheckAndLog<CommandInvoker>("CommandInvoker", ref total);
+
+        Debug.Log($"[Bootstrap] 系统注册状态：{registered}/{total} 已就绪");
     }
 
-    private void CheckSystem<T>(string name) where T : class
+    private int CheckAndLog<T>(string name, ref int total) where T : class
     {
-        if (!ServiceLocator.TryGet<T>(out _))
+        total++;
+        if (ServiceLocator.TryGet<T>(out _))
         {
-            Debug.LogWarning($"[Bootstrap] 关键系统未注册: {name}");
+            Debug.Log($"  ✅ {name}");
+            return 1;
+        }
+        else
+        {
+            Debug.LogWarning($"  ⚠️ {name} 未注册");
+            return 0;
         }
     }
 

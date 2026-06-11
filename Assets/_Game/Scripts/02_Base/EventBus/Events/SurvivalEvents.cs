@@ -39,6 +39,14 @@ public struct PlayerDeadEvent : IEvent
     public DeathCause Cause;
 }
 
+/// <summary>生存属性预警事件（低于安全阈值时触发，用于 UI 提示和教程）</summary>
+public struct SurvivalAttributeWarningEvent : IEvent
+{
+    public SurvivalAttributeType AttributeType;
+    public float CurrentValue;
+    public float WarningThreshold;
+}
+
 /// <summary>预警等级</summary>
 public enum CriticalWarningLevel
 {

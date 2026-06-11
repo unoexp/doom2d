@@ -74,8 +74,8 @@ namespace SurvivalGame.Show.Inventory.Managers
         private void OnDestroy()
         {
             // 取消Timer
-            TimerSystem.Instance?.CancelTimer(_openAnimTimerHandle);
-            TimerSystem.Instance?.CancelTimer(_closeAnimTimerHandle);
+            TimerSystem.Instance?.Cancel(_openAnimTimerHandle);
+            TimerSystem.Instance?.Cancel(_closeAnimTimerHandle);
 
             // 清理事件订阅
             if (_expansionPanel != null)
@@ -343,7 +343,7 @@ namespace SurvivalGame.Show.Inventory.Managers
         {
             // TODO: 实现面板打开动画（如渐入、滑动等）
             // 使用TimerSystem替代Invoke
-            _openAnimTimerHandle = TimerSystem.Instance.CreateTimer(
+            _openAnimTimerHandle = TimerSystem.Instance.Create(
                 _panelOpenDuration, FinishPanelOpenAnimation);
         }
 
@@ -363,7 +363,7 @@ namespace SurvivalGame.Show.Inventory.Managers
         private void StartPanelCloseAnimation()
         {
             // TODO: 实现面板关闭动画
-            _closeAnimTimerHandle = TimerSystem.Instance.CreateTimer(
+            _closeAnimTimerHandle = TimerSystem.Instance.Create(
                 _panelCloseDuration, FinishPanelCloseAnimation);
         }
 

@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 38fe196bd989f4a07b4de574320777c6, type: 3}
+  m_Name: SurvivalConfig
+  m_EditorClassIdentifier: 
+  InitialAttributes:
+  - AttributeType: 0
+    InitialValue: 100
+    MaxValue: 100
+    MinValue: 0
+  - AttributeType: 10
+    InitialValue: 100
+    MaxValue: 100
+    MinValue: 0
+  - AttributeType: 11
+    InitialValue: 100
+    MaxValue: 100
+    MinValue: 0
+  - AttributeType: 20
+    InitialValue: 37
+    MaxValue: 42
+    MinValue: 0
+  - AttributeType: 21
+    InitialValue: 100
+    MaxValue: 100
+    MinValue: 0
+  - AttributeType: 30
+    InitialValue: 100
+    MaxValue: 100
+    MinValue: 0
+  PassiveDecayRules:
+  - AttributeType: 10
+    DecayRatePerSecond: 0.5
+    EnableDecay: 1
+  - AttributeType: 11
+    DecayRatePerSecond: 0.8
+    EnableDecay: 1
+  - AttributeType: 21
+    DecayRatePerSecond: 0
+    EnableDecay: 0
+  - AttributeType: 30
+    DecayRatePerSecond: 0.1
+    EnableDecay: 1
+  StarvationDamagePerSecond: 1
+  DehydrationDamagePerSecond: 2
+  HypotherrmiaDamagePerSecond: 1.5
+  HyperthermiadamagePerSecond: 1.2
+  HypothermiaThreshold: 35
+  HyperthermiaThreshold: 40
+  HungerWarningThreshold: 0.25
+  ThirstWarningThreshold: 0.25
+  HealthWarningThreshold: 0.3

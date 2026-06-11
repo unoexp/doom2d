@@ -26,10 +26,3 @@ public struct DialogEndedEvent : IEvent
     public string NPCId;
 }
 
-/// <summary>NPC 信任度变化事件</summary>
-public struct NPCTrustChangedEvent : IEvent
-{
-    public string NPCId;
-    public int OldTrust;
-    public int NewTrust;
-}

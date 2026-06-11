@@ -70,6 +70,13 @@ public class PlayerController : MonoBehaviour, IDamageable
     private float _invincibilityTimer;
 
     // ══════════════════════════════════════════════════════
+    // 攻击参数（由 PlayerCombatController 设置）
+    // ══════════════════════════════════════════════════════
+
+    private AttackType _currentAttackType;
+    private float _currentDamageMultiplier = 1f;
+
+    // ══════════════════════════════════════════════════════
     // 公有属性（供 FSM 状态类读取）
     // ══════════════════════════════════════════════════════
 
@@ -90,6 +97,8 @@ public class PlayerController : MonoBehaviour, IDamageable
 
     public PlayerState CurrentState => _fsm?.CurrentState ?? PlayerState.Idle;
     public bool IsInvincible => _isInvincible;
+    public AttackType CurrentAttackType => _currentAttackType;
+    public float CurrentDamageMultiplier => _currentDamageMultiplier;
 
     // ══════════════════════════════════════════════════════
     // IDamageable 实现
@@ -219,6 +228,14 @@ public class PlayerController : MonoBehaviour, IDamageable
     {
         _isInvincible = false;
         _invincibilityTimer = 0f;
+    }
+
+    /// <summary>触发攻击（由 PlayerCombatController 调用）</summary>
+    public void TriggerAttack(AttackType attackType, float damageMultiplier)
+    {
+        _currentAttackType = attackType;
+        _currentDamageMultiplier = damageMultiplier;
+        _fsm.ChangeState(PlayerState.Attack);
     }
 
     // ══════════════════════════════════════════════════════

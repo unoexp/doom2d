@@ -7,19 +7,30 @@ using UnityEngine;
 public class PlayerAttackState : PlayerStateBase
 {
     private float _attackTimer;
-    private float _attackDuration = 0.4f;
+    private float _attackDuration;
+    private float _damageApplyTime;
     private bool _damageApplied;
 
-    // 攻击参数（后续可移到 SO 配置）
-    private const float ATTACK_DAMAGE = 15f;
     private const float ATTACK_RANGE = 1.5f;
-    private const float DAMAGE_APPLY_TIME = 0.15f; // 动画中伤害判定的时间点
+    private const float BASE_DAMAGE = 15f;
 
     public PlayerAttackState(PlayerController player, PlayerStateMachine fsm) : base(player, fsm) { }
 
     public override void OnEnter()
     {
-        Player.SetAnimationState("Attack");
+        var atkType = Player.CurrentAttackType;
+        if (atkType == AttackType.Heavy)
+        {
+            _attackDuration = 0.7f;
+            _damageApplyTime = 0.35f;
+        }
+        else
+        {
+            _attackDuration = 0.4f;
+            _damageApplyTime = 0.15f;
+        }
+
+        Player.SetAnimationState(atkType == AttackType.Heavy ? "HeavyAttack" : "Attack");
         Player.SetVelocityX(0f);
         _attackTimer = 0f;
         _damageApplied = false;
@@ -31,14 +42,12 @@ public class PlayerAttackState : PlayerStateBase
 
         _attackTimer += deltaTime;
 
-        // 在伤害判定时间点施加伤害
-        if (!_damageApplied && _attackTimer >= DAMAGE_APPLY_TIME)
+        if (!_damageApplied && _attackTimer >= _damageApplyTime)
         {
             _damageApplied = true;
             ApplyDamage();
         }
 
-        // 攻击动画结束后回到待机
         if (_attackTimer >= _attackDuration)
         {
             if (!Player.IsGrounded)
@@ -54,15 +63,16 @@ public class PlayerAttackState : PlayerStateBase
     {
         if (!ServiceLocator.TryGet<CombatSystem>(out var combat)) return;
 
-        // 攻击方向：面朝方向的前方
         float dir = Player.FacingRight ? 1f : -1f;
         Vector2 attackCenter = (Vector2)Player.Transform.position + new Vector2(dir * ATTACK_RANGE * 0.5f, 0f);
+
+        float finalDamage = BASE_DAMAGE * Player.CurrentDamageMultiplier;
 
         combat.DealDamageInArea(
             Player.gameObject,
             attackCenter,
             ATTACK_RANGE,
-            ATTACK_DAMAGE,
+            finalDamage,
             DamageType.Physical,
             LayerMask.GetMask("Enemy"));
     }

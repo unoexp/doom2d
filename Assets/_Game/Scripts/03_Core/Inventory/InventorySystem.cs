@@ -205,7 +205,6 @@ namespace SurvivalGame.Core.Inventory
 
             definition.OnUse(user);
 
-            bool itemConsumed = false;
             float oldDurability = itemStack.Durability;
 
             if (definition.HasDurability && definition.MaxDurability > 0)
@@ -240,7 +239,6 @@ namespace SurvivalGame.Core.Inventory
                     if (definition.DestroyOnZeroDurability)
                     {
                         _quickAccess.Slots[slotIndex] = slot.Clear();
-                        itemConsumed = true;
                     }
                 }
             }
@@ -249,12 +247,12 @@ namespace SurvivalGame.Core.Inventory
                 if (definition.MaxStackSize > 1)
                 {
                     _quickAccess.Slots[slotIndex] = slot.ChangeQuantity(-1);
-                    itemConsumed = true;
+
                 }
                 else
                 {
                     _quickAccess.Slots[slotIndex] = slot.Clear();
-                    itemConsumed = true;
+
                 }
                 _quickAccess.InvalidateCache();
             }
