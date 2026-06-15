@@ -82,7 +82,6 @@ public static class ExcelToJsonConverter
                 if (rows.Count == 0)
                 {
                     Debug.LogWarning($"[ExcelToJson] {fileName}.xlsx 没有数据行（第3行起）。");
-                    continue;
                 }
 
                 // 写入 JSON

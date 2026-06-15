@@ -31,6 +31,9 @@ public class VFXCataLogDataService : JsonDataService<VFXCatalogData>, IVFXCataLo
     public override IEnumerator LoadAsync()
     {
         string path = Path.Combine(Application.streamingAssetsPath, "Data", DataFileName);
+        // UnityWebRequest 加载本地文件需要 file:// 前缀（Editor/Standalone/iOS）
+        if (!path.StartsWith("file://") && !path.StartsWith("jar:"))
+            path = "file://" + path;
 
         using (var www = UnityWebRequest.Get(path))
         {
@@ -49,6 +52,8 @@ public class VFXCataLogDataService : JsonDataService<VFXCatalogData>, IVFXCataLo
             };
 
             string text = www.downloadHandler.text.TrimStart();
+            // 移除 UTF-8 BOM（﻿，部分编辑器自动添加）
+            text = text.TrimStart('﻿');
 
             // 兼容两种格式：Excel 转换器输出数组 [{...}]，手写 JSON 为包装对象 {"entries": [...]}
             if (text.StartsWith("["))

@@ -12,7 +12,9 @@ public struct AudioEntryData
 {
     [JsonProperty("audioId")] public string AudioId;
     [JsonProperty("group")][JsonConverter(typeof(StringEnumConverter))] public AudioGroup Group;
-    [JsonProperty("clipPaths")] public string[] ClipPaths;
+    [JsonProperty("clipPaths")]
+    [JsonConverter(typeof(SingleOrArrayConverter<string>))]
+    public string[] ClipPaths;
     [JsonProperty("volumeScale")] public float VolumeScale;
     [JsonProperty("pitchMin")] public float PitchMin;
     [JsonProperty("pitchMax")] public float PitchMax;

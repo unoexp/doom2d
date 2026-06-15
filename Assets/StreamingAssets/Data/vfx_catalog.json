@@ -1,14 +1,1 @@
-﻿[
-  {
-    "vfxid": "hit_spark",
-    "prefabpath": "VFX/HitSpark"
-  },
-  {
-    "vfxid": "explosion",
-    "prefabpath": "VFX/Explosion"
-  },
-  {
-    "vfxid": "buff_aura",
-    "prefabpath": "VFX/BuffAura"
-  }
-]
+﻿[]

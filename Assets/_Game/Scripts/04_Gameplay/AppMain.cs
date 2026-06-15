@@ -68,6 +68,7 @@ public class AppMain : MonoBehaviour
 
     private IEnumerator BootstrapCoroutine()
     {
+        Application.targetFrameRate = 60;
         Debug.Log("[AppMain] ── 开始数据加载阶段 ──");
 
         // Phase 1: 创建 DataLoaderSystem 并等待基础设施 JSON 数据加载
