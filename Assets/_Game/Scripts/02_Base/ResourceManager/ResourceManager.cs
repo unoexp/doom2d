@@ -24,16 +24,14 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     // 配置字段
     // ══════════════════════════════════════════════════════
 
-    [Header("缓存配置")]
-    [SerializeField] private ResourceCacheConfigSO _cacheConfig;
+    // [MIGRATED] 从 ResourceCacheConfigData (JSON) 加载配置
+    public ResourceCacheConfigData CacheConfig { get; set; }
 
-    [Header("网络配置")]
-    [SerializeField] private int _defaultNetworkTimeout = 30;
-    [SerializeField] private int _maxRetryCount = 3;
+    public int DefaultNetworkTimeout { get; set; } = 30;
+    public int MaxRetryCount { get; set; } = 3;
 
-    [Header("调试")]
-    [SerializeField] private bool _enableLogging = true;
-    [SerializeField] private bool _showCacheStatusInInspector = true;
+    public bool EnableLogging { get; set; } = true;
+    public bool ShowCacheStatusInInspector { get; set; } = true;
 
     // ══════════════════════════════════════════════════════
     // 内部字段
@@ -84,34 +82,32 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// </summary>
     protected override void OnInitialize()
     {
-        InitializeCache();
         RegisterServices();
-        SetupEventListeners();
-        IsInitialized = true;
-
-        Log("[ResourceManager] 初始化完成");
+        Log("[ResourceManager] 单例初始化完成（ServiceLocator 已注册）");
     }
 
-    protected override void OnDestroy()
+    /// <summary>配置注入后的完整初始化（ISystem）</summary>
+    public override void Initialize()
     {
-        // 注销ServiceLocator注册
+        InitSingleton();
+        InitializeCache();
+        SetupEventListeners();
+        IsInitialized = true;
+        Log("[ResourceManager] 完整初始化完成");
+    }
+
+    /// <summary>系统关闭清理（ISystem）</summary>
+    public override void Shutdown()
+    {
         ServiceLocator.Unregister<ResourceManager>();
         ServiceLocator.Unregister<IResourceLoader>();
         ServiceLocator.Unregister<IAssetBundleLoader>();
-
-        // 取消EventBus订阅
         EventBus.Unsubscribe<MemoryWarningEvent>(OnMemoryWarning);
-
-        // 清理所有正在进行的操作
         CleanupAllOperations();
-
-        // 卸载所有AssetBundle
         UnloadAllBundles();
-
-        // 清空缓存
         _resourceCache?.Clear();
-
-        base.OnDestroy();
+        Log("[ResourceManager] 已关闭");
+        base.Shutdown();
     }
 
     // ══════════════════════════════════════════════════════
@@ -123,7 +119,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// </summary>
     private void InitializeCache()
     {
-        if (_cacheConfig == null)
+        if (CacheConfig == null)
         {
             LogWarning("[ResourceManager] 未找到缓存配置，使用默认值");
             _resourceCache = new ResourceCache(maxCacheItems: 100, maxMemoryUsageMB: 100);
@@ -131,8 +127,8 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
         else
         {
             _resourceCache = new ResourceCache(
-                maxCacheItems: _cacheConfig.MaxCacheItems,
-                maxMemoryUsageMB: _cacheConfig.MaxMemoryUsageMB
+                maxCacheItems: CacheConfig.MaxCacheItems,
+                maxMemoryUsageMB: CacheConfig.MaxMemoryUsageMB
             );
         }
 
@@ -1082,7 +1078,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// </summary>
     private void Log(string message)
     {
-        if (_enableLogging)
+        if (EnableLogging)
             Debug.Log(message);
     }
 
@@ -1091,7 +1087,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
     /// </summary>
     private void LogWarning(string message)
     {
-        if (_enableLogging)
+        if (EnableLogging)
             Debug.LogWarning(message);
     }
 
@@ -1226,7 +1222,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
 
     private void OnGUI()
     {
-        if (!_showCacheStatusInInspector)
+        if (!ShowCacheStatusInInspector)
             return;
 
         if (Event.current.type == EventType.Repaint)
@@ -1248,7 +1244,7 @@ public class ResourceManager : MonoSingleton<ResourceManager>,
         if (Time.frameCount % 300 == 0) // 每5秒（假设60FPS）
         {
             long totalMemory = System.GC.GetTotalMemory(false);
-            if (_cacheConfig != null && totalMemory > (long)_cacheConfig.MemoryWarningThresholdMB * 1024 * 1024)
+            if (CacheConfig != null && totalMemory > (long)CacheConfig.MemoryWarningThresholdMB * 1024 * 1024)
             {
                 // 自动清理
                 ClearCache();

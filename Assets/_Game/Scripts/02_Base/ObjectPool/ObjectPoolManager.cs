@@ -55,10 +55,10 @@ public sealed class ObjectPoolManager : MonoSingleton<ObjectPoolManager>
         ServiceLocator.Register<ObjectPoolManager>(this);
     }
 
-    protected override void OnDestroy()
+    public override void Shutdown()
     {
-        base.OnDestroy();
         ServiceLocator.Unregister<ObjectPoolManager>();
+        base.Shutdown();
     }
 
     // ══════════════════════════════════════════════════════

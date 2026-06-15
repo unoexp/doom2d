@@ -376,3 +376,169 @@ public enum AttackType
     Light           = 0,    // 轻击
     Heavy           = 1,    // 重击
 }
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 消耗品效果类型。定义 ConsumableItemData 中每条效果的行为。
+/// </summary>
+public enum ConsumableEffectType
+{
+    RestoreHealth       = 0,    // 恢复生命值
+    RestoreHunger       = 1,    // 恢复饱食度
+    RestoreThirst       = 2,    // 恢复水分
+    RestoreStamina      = 3,    // 恢复体力
+    RestoreTemperature  = 4,    // 恢复体温
+    Buff                = 5,    // 施加增益效果
+    Debuff              = 6,    // 施加负面效果
+    CureEffect          = 7,    // 解除指定状态效果
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 物品分类枚举。用于 ItemData 区分物品大类。
+/// </summary>
+public enum ItemCategory
+{
+    General     = 0,
+    Weapon      = 1,
+    Armor       = 2,
+    Tool        = 3,
+    Consumable  = 4,
+    Resource    = 5,
+    Material    = 6,
+    KeyItem     = 7,
+    ModExtension = 100,
+}
+
+/// <summary>
+/// 物品稀有度枚举。
+/// </summary>
+public enum ItemRarity
+{
+    Common      = 0,
+    Uncommon    = 1,
+    Rare        = 2,
+    Epic        = 3,
+    Legendary   = 4,
+    Unique      = 5,
+}
+
+/// <summary>
+/// 建造放置类型。
+/// </summary>
+public enum BuildPlacementType
+{
+    Grid    = 0,
+    Free    = 1,
+}
+
+/// <summary>
+/// 庇护所模块类别。
+/// </summary>
+public enum ShelterModuleCategory
+{
+    Structure   = 0,
+    Functional  = 1,
+    Storage     = 2,
+    Utility     = 3,
+    Furniture   = 4,
+    Decoration  = 5,
+}
+
+/// <summary>
+/// NPC 行为倾向。
+/// </summary>
+public enum NPCDisposition
+{
+    Neutral     = 0,
+    Friendly    = 1,
+    Hostile     = 2,
+}
+
+/// <summary>
+/// 成就类别。
+/// </summary>
+public enum AchievementCategory
+{
+    Survival    = 0,
+    Combat      = 1,
+    Exploration = 2,
+    Building    = 3,
+    Social      = 4,
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 护甲装备槽位。用于 ArmorItemData 指定穿戴位置。
+/// </summary>
+public enum ArmorSlot
+{
+    Head    = 0,
+    Chest   = 1,
+    Legs    = 2,
+    Feet    = 3,
+    Hands   = 4,
+    Back    = 5,
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 工具类型。用于 ToolItemData 区分采集/建造工具。
+/// </summary>
+public enum ToolType
+{
+    Axe         = 0,    // 斧头（伐木）
+    Pickaxe     = 1,    // 镐（采矿）
+    Shovel      = 2,    // 铲（挖掘）
+    Hammer      = 3,    // 锤（建造/修理）
+    FishingRod  = 4,    // 钓鱼竿
+    Knife       = 5,    // 小刀（剥皮/切割）
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 背包扩展效果类型。用于 ExpansionEffectData 区分不同扩展效果。
+/// </summary>
+public enum ExpansionType
+{
+    CapacityIncrease        = 0,    // 容量增加
+    WeightLimitIncrease     = 1,    // 重量限制增加
+    SlotTypeUpgrade         = 2,    // 槽位类型升级
+    SpecialSlotAddition     = 3,    // 特殊槽位添加
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 任务目标类型。用于 QuestData 定义目标任务条件。
+/// </summary>
+public enum QuestObjectiveType
+{
+    CollectItem     = 0,    // 收集指定物品
+    CraftItem       = 1,    // 制作指定物品
+    BuildStructure  = 2,    // 建造指定建筑
+    ReachLayer      = 3,    // 到达指定地层深度
+    DefeatEnemy     = 4,    // 击败指定类型敌人
+    TalkToNPC       = 5,    // 与指定NPC对话
+    SurviveDays     = 6,    // 存活指定天数
+    ExploreArea     = 7,    // 探索指定区域
+}
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 库存扩展目标容器。用于 ExpansionDefinitionData 指定扩展作用于哪个容器。
+/// </summary>
+public enum ExpansionTargetContainer
+{
+    MainInventory   = 0,    // 主背包
+    QuickAccess     = 1,    // 快捷栏
+    Both            = 2,    // 两者皆适用
+}

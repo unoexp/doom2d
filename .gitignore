@@ -9,3 +9,5 @@ __pycache__
 *.csproj
 *.sln
 .DS_Store
+
+.codegraph

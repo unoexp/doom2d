@@ -32,12 +32,12 @@ public interface IModEntry
 
 /// <summary>
 /// MOD 数据提供接口。允许 MOD 注入自定义数据（物品/配方/敌人等）。
+/// [MIGRATED] 返回类型从 SO 迁移到 POCO 数据类。
 /// </summary>
 public interface IModDataProvider
 {
     /// <summary>获取 MOD 提供的物品定义</summary>
-    ItemDefinitionSO[] GetCustomItems();
+    ItemData[] GetCustomItems();
 
-    /// <summary>获取 MOD 提供的配方定义</summary>
-    RecipeDefinitionSO[] GetCustomRecipes();
+    // TODO: 重新实现配方系统后恢复 GetCustomRecipes()
 }

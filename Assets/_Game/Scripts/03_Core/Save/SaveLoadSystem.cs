@@ -21,7 +21,7 @@ using UnityEngine;
 ///   · 在销毁时调用 Unregister(this)
 ///   · 上层通过 ServiceLocator.Get&lt;SaveLoadSystem&gt;() 获取实例
 /// </summary>
-public class SaveLoadSystem : MonoBehaviour
+public class SaveLoadSystem : MonoBehaviour, ISystem
 {
     // ══════════════════════════════════════════════════════
     // 常量
@@ -49,7 +49,9 @@ public class SaveLoadSystem : MonoBehaviour
         ServiceLocator.Register<SaveLoadSystem>(this);
     }
 
-    private void OnDestroy()
+    public void Initialize() { }
+
+    public void Shutdown()
     {
         ServiceLocator.Unregister<SaveLoadSystem>();
     }

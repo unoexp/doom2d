@@ -25,12 +25,9 @@ public class VFXManager : MonoSingleton<VFXManager>
     // 配置
     // ══════════════════════════════════════════════════════
 
-    [Header("特效目录")]
-    [SerializeField] private VFXEntry[] _catalog;
+    public VFXEntry[] Catalog { get; set; }
 
-    [Header("对象池配置")]
-    [Tooltip("每种特效的默认预热数量")]
-    [SerializeField] private int _defaultPoolSize = 3;
+    public int DefaultPoolSize { get; set; } = 3;
 
     // ══════════════════════════════════════════════════════
     // 数据
@@ -54,24 +51,36 @@ public class VFXManager : MonoSingleton<VFXManager>
     protected override void Awake()
     {
         base.Awake();
+        // [AppMain 重构] 仅注册 ServiceLocator，目录构建移至 Initialize()
         ServiceLocator.Register<VFXManager>(this);
+    }
+
+    /// <summary>配置注入后的目录构建（ISystem）</summary>
+    public override void Initialize()
+    {
+        InitSingleton();
 
         // 构建目录
-        if (_catalog != null)
+        if (Catalog != null)
         {
-            for (int i = 0; i < _catalog.Length; i++)
+            for (int i = 0; i < Catalog.Length; i++)
             {
-                var entry = _catalog[i];
+                var entry = Catalog[i];
                 if (entry.Prefab == null || string.IsNullOrEmpty(entry.VFXId)) continue;
                 _prefabMap[entry.VFXId] = entry.Prefab;
             }
         }
+
+        Debug.Log($"[VFXManager] 完整初始化完成（{_prefabMap.Count} 个特效已注册）");
     }
 
-    protected override void OnDestroy()
+    /// <summary>系统关闭清理（ISystem）</summary>
+    public override void Shutdown()
     {
+        StopAll();
         ServiceLocator.Unregister<VFXManager>();
-        base.OnDestroy();
+        Debug.Log("[VFXManager] 已关闭");
+        base.Shutdown();
     }
 
     private void Update()

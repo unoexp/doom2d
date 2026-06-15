@@ -4,6 +4,8 @@
 // ══════════════════════════════════════════════════════════════════════
 using System.Collections.Generic;
 using UnityEngine;
+// [MIGRATED] AudioEntry 类型已从 SO 迁移至 POCO AudioEntryData
+using AudioEntry = AudioEntryData;
 
 /// <summary>
 /// 中央音频管理系统。
@@ -20,23 +22,18 @@ public sealed class AudioManager : MonoSingleton<AudioManager>
     // 配置
     // ══════════════════════════════════════════════════════
 
-    [Header("音效目录")]
-    [Tooltip("音效目录 SO 列表（可多个，会合并）")]
-    [SerializeField] private AudioCatalogSO[] _catalogs;
+    // [MIGRATED] 从 AudioCatalogData (JSON) 加载音频目录
+    public AudioCatalogData[] Catalogs { get; set; }
 
-    [Header("音频源")]
-    [SerializeField] private AudioSource _musicSource;
-    [SerializeField] private AudioSource _ambientSource;
+    public AudioSource MusicSource { get; set; }
+    public AudioSource AmbientSource { get; set; }
 
-    [Header("SFX 池")]
-    [Tooltip("SFX AudioSource 对象池大小")]
-    [SerializeField] private int _sfxPoolSize = 8;
+    public int SfxPoolSize { get; set; } = 8;
 
-    [Header("默认音量")]
-    [SerializeField] [Range(0f, 1f)] private float _defaultMasterVolume = 1f;
-    [SerializeField] [Range(0f, 1f)] private float _defaultMusicVolume = 0.7f;
-    [SerializeField] [Range(0f, 1f)] private float _defaultSfxVolume = 1f;
-    [SerializeField] [Range(0f, 1f)] private float _defaultAmbientVolume = 0.5f;
+    public float DefaultMasterVolume { get; set; } = 1f;
+    public float DefaultMusicVolume { get; set; } = 0.7f;
+    public float DefaultSfxVolume { get; set; } = 1f;
+    public float DefaultAmbientVolume { get; set; } = 0.5f;
 
     // ══════════════════════════════════════════════════════
     // 字段
@@ -64,31 +61,40 @@ public sealed class AudioManager : MonoSingleton<AudioManager>
 
     protected override void OnInitialize()
     {
+        // [AppMain 重构] 仅注册 ServiceLocator（无配置依赖）
+        ServiceLocator.Register<AudioManager>(this);
+    }
+
+    /// <summary>配置注入后的完整初始化（ISystem）</summary>
+    public override void Initialize()
+    {
+        InitSingleton();
+
         // 初始化音量
-        _volumes[AudioGroup.Master] = _defaultMasterVolume;
-        _volumes[AudioGroup.Music] = _defaultMusicVolume;
-        _volumes[AudioGroup.SFX] = _defaultSfxVolume;
-        _volumes[AudioGroup.Ambient] = _defaultAmbientVolume;
+        _volumes[AudioGroup.Master] = DefaultMasterVolume;
+        _volumes[AudioGroup.Music] = DefaultMusicVolume;
+        _volumes[AudioGroup.SFX] = DefaultSfxVolume;
+        _volumes[AudioGroup.Ambient] = DefaultAmbientVolume;
         _volumes[AudioGroup.UI] = 1f;
         _volumes[AudioGroup.Voice] = 1f;
 
         // 自动创建音频源
-        if (_musicSource == null)
+        if (MusicSource == null)
         {
-            _musicSource = gameObject.AddComponent<AudioSource>();
-            _musicSource.loop = true;
-            _musicSource.playOnAwake = false;
+            MusicSource = gameObject.AddComponent<AudioSource>();
+            MusicSource.loop = true;
+            MusicSource.playOnAwake = false;
         }
 
-        if (_ambientSource == null)
+        if (AmbientSource == null)
         {
-            _ambientSource = gameObject.AddComponent<AudioSource>();
-            _ambientSource.loop = true;
-            _ambientSource.playOnAwake = false;
+            AmbientSource = gameObject.AddComponent<AudioSource>();
+            AmbientSource.loop = true;
+            AmbientSource.playOnAwake = false;
         }
 
         // 预热 SFX 池
-        for (int i = 0; i < _sfxPoolSize; i++)
+        for (int i = 0; i < SfxPoolSize; i++)
         {
             var source = gameObject.AddComponent<AudioSource>();
             source.playOnAwake = false;
@@ -98,13 +104,15 @@ public sealed class AudioManager : MonoSingleton<AudioManager>
         // 加载音效目录
         LoadCatalogs();
 
-        ServiceLocator.Register<AudioManager>(this);
+        Debug.Log($"[AudioManager] 完整初始化完成");
     }
 
-    protected override void OnDestroy()
+    /// <summary>系统关闭清理（ISystem）</summary>
+    public override void Shutdown()
     {
         ServiceLocator.Unregister<AudioManager>();
-        base.OnDestroy();
+        Debug.Log("[AudioManager] 已关闭");
+        base.Shutdown();
     }
 
     private void Update()
@@ -147,7 +155,7 @@ public sealed class AudioManager : MonoSingleton<AudioManager>
     {
         if (clip == null) return;
 
-        if (_musicSource.isPlaying && fadeDuration > 0f)
+        if (MusicSource.isPlaying && fadeDuration > 0f)
         {
             // 先淡出当前曲目，再淡入新曲目
             _pendingMusic = clip;
@@ -158,16 +166,16 @@ public sealed class AudioManager : MonoSingleton<AudioManager>
         }
         else
         {
-            _musicSource.clip = clip;
-            _musicSource.volume = GetEffectiveVolume(AudioGroup.Music);
-            _musicSource.Play();
+            MusicSource.clip = clip;
+            MusicSource.volume = GetEffectiveVolume(AudioGroup.Music);
+            MusicSource.Play();
         }
     }
 
     /// <summary>停止背景音乐</summary>
     public void StopMusic(float fadeDuration = 1f)
     {
-        if (fadeDuration > 0f && _musicSource.isPlaying)
+        if (fadeDuration > 0f && MusicSource.isPlaying)
         {
             _pendingMusic = null;
             _fadeDuration = fadeDuration;
@@ -177,7 +185,7 @@ public sealed class AudioManager : MonoSingleton<AudioManager>
         }
         else
         {
-            _musicSource.Stop();
+            MusicSource.Stop();
         }
     }
 
@@ -213,15 +221,15 @@ public sealed class AudioManager : MonoSingleton<AudioManager>
     public void PlayAmbient(AudioClip clip)
     {
         if (clip == null) return;
-        _ambientSource.clip = clip;
-        _ambientSource.volume = GetEffectiveVolume(AudioGroup.Ambient);
-        _ambientSource.Play();
+        AmbientSource.clip = clip;
+        AmbientSource.volume = GetEffectiveVolume(AudioGroup.Ambient);
+        AmbientSource.Play();
     }
 
     /// <summary>停止环境音</summary>
     public void StopAmbient()
     {
-        _ambientSource.Stop();
+        AmbientSource.Stop();
     }
 
     // ══════════════════════════════════════════════════════
@@ -283,26 +291,41 @@ public sealed class AudioManager : MonoSingleton<AudioManager>
     // 内部方法
     // ══════════════════════════════════════════════════════
 
-    /// <summary>加载所有音效目录</summary>
+    /// <summary>加载所有音效目录（从 ClipPaths 字符串加载 AudioClip 资源）</summary>
     private void LoadCatalogs()
     {
-        if (_catalogs == null) return;
+        if (Catalogs == null) return;
 
-        for (int i = 0; i < _catalogs.Length; i++)
+        var resourceManager = ServiceLocator.Get<ResourceManager>();
+
+        for (int i = 0; i < Catalogs.Length; i++)
         {
-            var catalog = _catalogs[i];
+            var catalog = Catalogs[i];
             if (catalog == null || catalog.Entries == null) continue;
 
             for (int j = 0; j < catalog.Entries.Length; j++)
             {
                 var entry = catalog.Entries[j];
                 if (string.IsNullOrEmpty(entry.AudioId)) continue;
-                if (entry.Clips == null || entry.Clips.Length == 0) continue;
+                if (entry.ClipPaths == null || entry.ClipPaths.Length == 0) continue;
 
-                // 默认音量和音高
-                if (entry.VolumeScale <= 0f) entry.VolumeScale = 1f;
-                if (entry.PitchMin <= 0f) entry.PitchMin = 1f;
-                if (entry.PitchMax <= 0f) entry.PitchMax = 1f;
+                // 从 ClipPaths 加载 AudioClip 资源（运行时缓存）
+                var clips = new AudioClip[entry.ClipPaths.Length];
+                bool hasAnyClip = false;
+                for (int k = 0; k < entry.ClipPaths.Length; k++)
+                {
+                    if (!string.IsNullOrEmpty(entry.ClipPaths[k]) && resourceManager != null)
+                    {
+                        clips[k] = resourceManager.Load<AudioClip>(entry.ClipPaths[k]);
+                        if (clips[k] != null) hasAnyClip = true;
+                    }
+                }
+
+                if (!hasAnyClip) continue;
+
+                entry.Clips = clips;
+                // 写回数组（entry 是 struct 值拷贝）
+                catalog.Entries[j] = entry;
 
                 _entryMap[entry.AudioId] = entry;
             }
@@ -335,8 +358,8 @@ public sealed class AudioManager : MonoSingleton<AudioManager>
 
     private void ApplyVolumes()
     {
-        _musicSource.volume = GetEffectiveVolume(AudioGroup.Music);
-        _ambientSource.volume = GetEffectiveVolume(AudioGroup.Ambient);
+        MusicSource.volume = GetEffectiveVolume(AudioGroup.Music);
+        AmbientSource.volume = GetEffectiveVolume(AudioGroup.Ambient);
     }
 
     /// <summary>从池中获取空闲的 AudioSource</summary>
@@ -362,16 +385,16 @@ public sealed class AudioManager : MonoSingleton<AudioManager>
         if (_isFadingOut)
         {
             float t = Mathf.Clamp01(_fadeTimer / halfDuration);
-            _musicSource.volume = Mathf.Lerp(GetEffectiveVolume(AudioGroup.Music), 0f, t);
+            MusicSource.volume = Mathf.Lerp(GetEffectiveVolume(AudioGroup.Music), 0f, t);
 
             if (_fadeTimer >= halfDuration)
             {
-                _musicSource.Stop();
+                MusicSource.Stop();
 
                 if (_pendingMusic != null)
                 {
-                    _musicSource.clip = _pendingMusic;
-                    _musicSource.Play();
+                    MusicSource.clip = _pendingMusic;
+                    MusicSource.Play();
                     _pendingMusic = null;
                     _isFadingOut = false;
                     _fadeTimer = 0f;
@@ -386,7 +409,7 @@ public sealed class AudioManager : MonoSingleton<AudioManager>
         {
             // 淡入
             float t = Mathf.Clamp01(_fadeTimer / halfDuration);
-            _musicSource.volume = Mathf.Lerp(0f, GetEffectiveVolume(AudioGroup.Music), t);
+            MusicSource.volume = Mathf.Lerp(0f, GetEffectiveVolume(AudioGroup.Music), t);
 
             if (_fadeTimer >= halfDuration)
                 _isFading = false;

@@ -58,10 +58,10 @@ public class UIManager : MonoSingleton<UIManager>
         ServiceLocator.Register<UIManager>(this);
     }
 
-    protected override void OnDestroy()
+    public override void Shutdown()
     {
         ServiceLocator.Unregister<UIManager>();
-        base.OnDestroy();
+        base.Shutdown();
     }
 
     // ══════════════════════════════════════════════════════

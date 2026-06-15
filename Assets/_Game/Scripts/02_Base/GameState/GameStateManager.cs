@@ -57,11 +57,11 @@ public sealed class GameStateManager : MonoSingleton<GameStateManager>
         _stateMachine.ChangeState(GameState.Initializing);
     }
 
-    protected override void OnDestroy()
+    public override void Shutdown()
     {
         _stateMachine.OnStateChanged -= OnStateMachineChanged;
         ServiceLocator.Unregister<GameStateManager>();
-        base.OnDestroy();
+        base.Shutdown();
     }
 
     // ══════════════════════════════════════════════════════

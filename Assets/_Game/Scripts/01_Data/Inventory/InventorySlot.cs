@@ -45,6 +45,16 @@ namespace SurvivalGame.Data.Inventory
             _itemStack = ItemStack.Empty;
         }
 
+        /// <summary>从 JSON POCO 数据构造槽位</summary>
+        public static InventorySlot FromData(InventorySlotData data, int index)
+        {
+            return new InventorySlot(
+                index,
+                data.SlotType,
+                data.AllowedCategories ?? Array.Empty<string>()
+            );
+        }
+
         // ============ 属性访问器 ============
         public int Index => _index;
         public SlotType SlotType => _slotType;

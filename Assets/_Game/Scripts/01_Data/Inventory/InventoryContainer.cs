@@ -1,45 +1,12 @@
 // 📁 01_Data/Inventory/InventoryContainer.cs
 // 背包容器纯数据结构
+// [MIGRATED] 移除 InventoryContainerSO ScriptableObject，改用 InventoryContainerData POCO
 using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace SurvivalGame.Data.Inventory
 {
-    /// <summary>
-    /// 背包容器配置，通过ScriptableObject定义布局
-    /// </summary>
-    [CreateAssetMenu(fileName = "InventoryContainer_", menuName = "SurvivalGame/Inventory/Container")]
-    public class InventoryContainerSO : ScriptableObject
-    {
-        [SerializeField] private string _containerId;
-        [SerializeField] private int _capacity = 24;
-        [SerializeField] private InventorySlot[] _slotDefinitions;
-
-        [Header("重量限制")]
-        [SerializeField] private bool _hasWeightLimit = false;
-        [SerializeField] private float _maxWeight = 100f;
-
-        public string ContainerId => _containerId;
-        public int Capacity => _capacity;
-        public InventorySlot[] SlotDefinitions => _slotDefinitions;
-        public bool HasWeightLimit => _hasWeightLimit;
-        public float MaxWeight => _maxWeight;
-
-        private void OnValidate()
-        {
-            if (string.IsNullOrEmpty(_containerId))
-                _containerId = name;
-
-            if (_slotDefinitions == null || _slotDefinitions.Length != _capacity)
-            {
-                _slotDefinitions = new InventorySlot[_capacity];
-                for (int i = 0; i < _capacity; i++)
-                    _slotDefinitions[i] = new InventorySlot(i);
-            }
-        }
-    }
-
     /// <summary>
     /// 背包容器运行时数据
     /// 🏗️ 纯数据容器：仅持有槽位数组和基础查询，所有操作逻辑在 03_Core/InventorySystem 中
@@ -72,16 +39,20 @@ namespace SurvivalGame.Data.Inventory
             _itemIndexCache = null;
         }
 
-        public InventoryContainer(InventoryContainerSO config)
+        /// <summary>从 JSON POCO 数据构造背包容器</summary>
+        public InventoryContainer(InventoryContainerData config)
         {
-            _containerId = config.ContainerId;
-            _slots = new InventorySlot[config.Capacity];
-            _hasWeightLimit = config.HasWeightLimit;
-            _maxWeight = config.MaxWeight;
+            _containerId = config?.ContainerId ?? string.Empty;
+            int capacity = config?.Capacity ?? 0;
+            _slots = new InventorySlot[capacity];
+            _hasWeightLimit = config?.HasWeightLimit ?? false;
+            _maxWeight = config?.MaxWeight ?? 100f;
 
-            var definitions = config.SlotDefinitions;
+            var definitions = config?.Slots;
             for (int i = 0; i < _slots.Length; i++)
-                _slots[i] = i < definitions.Length ? definitions[i] : new InventorySlot(i);
+                _slots[i] = (definitions != null && i < definitions.Length)
+                    ? InventorySlot.FromData(definitions[i], i)
+                    : new InventorySlot(i);
 
             _itemIndexCache = null;
         }

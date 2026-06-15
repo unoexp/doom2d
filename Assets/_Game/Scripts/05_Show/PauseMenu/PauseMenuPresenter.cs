@@ -69,10 +69,8 @@ public class PauseMenuPresenter : MonoBehaviour
         _isPaused = true;
         Time.timeScale = 0f;
 
-        // 检查庇护所内存档
+        // 检查庇护所内存档（骨架版本：无 PlayerFacade，始终允许存档）
         bool canSave = true;
-        if (ServiceLocator.TryGet<PlayerFacade>(out var player))
-            canSave = player.IsInShelter;
 
         _menuView.SetSaveAvailable(canSave);
 

@@ -30,7 +30,7 @@ public struct ModInfo
 /// 设计说明：
 ///   · 06_Extensions 层，可引用所有低层
 ///   · MOD 通过约定目录结构注册（非反射加载，安全可控）
-///   · 初始版本仅支持 ScriptableObject 数据 MOD
+///   · [MIGRATED] 数据从 ScriptableObject 迁移到 JSON POCO
 /// </summary>
 public class ModLoader : MonoBehaviour
 {
@@ -110,9 +110,9 @@ public class ModLoader : MonoBehaviour
     }
 
     /// <summary>获取所有 MOD 提供的自定义物品</summary>
-    public List<ItemDefinitionSO> GetAllCustomItems()
+    public List<ItemData> GetAllCustomItems()
     {
-        var result = new List<ItemDefinitionSO>();
+        var result = new List<ItemData>();
         for (int i = 0; i < _dataProviders.Count; i++)
         {
             var items = _dataProviders[i].GetCustomItems();
@@ -122,18 +122,7 @@ public class ModLoader : MonoBehaviour
         return result;
     }
 
-    /// <summary>获取所有 MOD 提供的自定义配方</summary>
-    public List<RecipeDefinitionSO> GetAllCustomRecipes()
-    {
-        var result = new List<RecipeDefinitionSO>();
-        for (int i = 0; i < _dataProviders.Count; i++)
-        {
-            var recipes = _dataProviders[i].GetCustomRecipes();
-            if (recipes != null)
-                result.AddRange(recipes);
-        }
-        return result;
-    }
+    // TODO: 重新实现配方系统后恢复 GetAllCustomRecipes()
 
     // ══════════════════════════════════════════════════════
     // 内部方法

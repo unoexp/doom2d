@@ -58,10 +58,10 @@ public sealed class TimerSystem : MonoSingleton<TimerSystem>
         ServiceLocator.Register<TimerSystem>(this);
     }
 
-    protected override void OnDestroy()
+    public override void Shutdown()
     {
-        base.OnDestroy();
         ServiceLocator.Unregister<TimerSystem>();
+        base.Shutdown();
     }
 
     // ══════════════════════════════════════════════════════
