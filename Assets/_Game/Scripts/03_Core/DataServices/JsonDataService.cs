@@ -15,7 +15,7 @@ using System.IO;
 /// 从 StreamingAssets/Data/ 加载 JSON 文件并反序列化为 List&lt;T&gt;，
 /// 以指定 ID 字段建立字典索引供快速查找。
 /// </summary>
-public abstract class JsonDataService<T> : JsonDataServiceBase where T : class
+public abstract class JsonDataService<T> : JsonDataServiceBase
 {
     /// <summary>ID → 数据 的快速查找字典</summary>
     protected Dictionary<string, T> _dataMap = new Dictionary<string, T>();
@@ -64,7 +64,16 @@ public abstract class JsonDataService<T> : JsonDataServiceBase where T : class
                 MissingMemberHandling = MissingMemberHandling.Ignore
             };
 
-            _allData = JsonConvert.DeserializeObject<List<T>>(json, settings) ?? new List<T>();
+            if (ColumnTableConverter.IsColumnTableFormat(json))
+            {
+                // 列式格式 {"columns": [...], "rows": [[...], ...]}
+                _allData = ColumnTableConverter.DeserializeColumnTable<T>(json, settings);
+            }
+            else
+            {
+                // 旧行式格式 [{...}, {...}]
+                _allData = JsonConvert.DeserializeObject<List<T>>(json, settings) ?? new List<T>();
+            }
 
             _dataMap.Clear();
             foreach (var item in _allData)
@@ -79,10 +88,10 @@ public abstract class JsonDataService<T> : JsonDataServiceBase where T : class
         }
     }
 
-    /// <summary>通过 ID 获取数据条目</summary>
+    /// <summary>通过 ID 获取数据条目。未找到时返回 default(T)（class 为 null，struct 为零值）。</summary>
     public T GetById(string id)
     {
-        if (string.IsNullOrEmpty(id)) return null;
+        if (string.IsNullOrEmpty(id)) return default;
         _dataMap.TryGetValue(id, out var data);
         return data;
     }
@@ -90,7 +99,7 @@ public abstract class JsonDataService<T> : JsonDataServiceBase where T : class
     /// <summary>安全获取数据条目（不抛异常）</summary>
     public bool TryGetById(string id, out T data)
     {
-        data = null;
+        data = default;
         if (string.IsNullOrEmpty(id)) return false;
         return _dataMap.TryGetValue(id, out data);
     }

@@ -55,14 +55,22 @@ public class ResourceCacheConfigDataService : JsonDataService<ResourceCacheConfi
             // 移除 UTF-8 BOM（﻿，部分编辑器自动添加）
             text = text.TrimStart('﻿');
 
-            // 兼容两种格式：手写 JSON 为单例对象 {...}，Excel 转换器输出单元素数组 [{...}]
-            if (text.StartsWith("["))
+            // 兼容三种格式：列式 → 单元素数组 [{...}] → 单例对象 {...}
+            if (ColumnTableConverter.IsColumnTableFormat(text))
             {
+                // 列式格式 {"columns": [...], "rows": [[...]]} → 取首行
+                var list = ColumnTableConverter.DeserializeColumnTable<ResourceCacheConfigData>(text, settings);
+                _config = (list != null && list.Count > 0) ? list[0] : new ResourceCacheConfigData();
+            }
+            else if (text.StartsWith("["))
+            {
+                // 旧数组格式：[{...}]
                 var list = JsonConvert.DeserializeObject<List<ResourceCacheConfigData>>(text, settings);
                 _config = (list != null && list.Count > 0) ? list[0] : new ResourceCacheConfigData();
             }
             else
             {
+                // 旧单例格式：{...}
                 _config = JsonConvert.DeserializeObject<ResourceCacheConfigData>(text, settings);
             }
             _allData = new List<ResourceCacheConfigData> { _config };

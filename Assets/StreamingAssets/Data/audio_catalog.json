@@ -1,1 +1,11 @@
-﻿[]
+﻿{
+  "columns": [
+    "audioid",
+    "group",
+    "clippaths",
+    "volumescale",
+    "pitchmin",
+    "pitchmax"
+  ],
+  "rows": []
+}

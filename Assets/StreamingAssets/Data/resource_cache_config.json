@@ -1,15 +1,32 @@
-﻿[
-  {
-    "maxcacheitems": 100,
-    "maxmemoryusagemb": 256,
-    "memorywarningthresholdmb": 200,
-    "cachecleanupinterval": 60,
-    "cacheitemtimeout": 300,
-    "downloadretrycount": 3,
-    "downloadtimeoutseconds": 30,
-    "downloadchunksizekb": 256,
-    "maxconcurrentdownloads": 2,
-    "localbundledirectory": "AssetBundles",
-    "bundlecachedirectory": "BundleCache"
-  }
-]
+﻿{
+  "columns": [
+    "maxcacheitems",
+    "maxmemoryusagemb",
+    "memorywarningthresholdmb",
+    "cachecleanupinterval",
+    "cacheitemtimeout",
+    "remotebundlebaseurl",
+    "downloadretrycount",
+    "downloadtimeoutseconds",
+    "downloadchunksizekb",
+    "maxconcurrentdownloads",
+    "localbundledirectory",
+    "bundlecachedirectory"
+  ],
+  "rows": [
+    [
+      100,
+      256,
+      200,
+      60,
+      300,
+      null,
+      3,
+      30,
+      256,
+      2,
+      "AssetBundles",
+      "BundleCache"
+    ]
+  ]
+}

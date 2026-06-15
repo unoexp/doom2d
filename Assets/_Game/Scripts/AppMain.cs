@@ -86,6 +86,10 @@ public class AppMain : MonoBehaviour
             var am = ServiceLocator.Get<AudioManager>();
             am.Catalogs = new[] { ServiceLocator.Get<IAudioCatalogDataService>().GetCatalog() };
             am.Initialize();
+
+            var wm = ServiceLocator.Get<WindowManager>();
+            wm.ConfigService = ServiceLocator.Get<IWindowConfigDataService>();
+            wm.Initialize();
         }
 
         Debug.Log("[AppMain] ── 创建业务系统 ──");
@@ -149,6 +153,9 @@ public class AppMain : MonoBehaviour
 
         // VFXManager（特效目录从 JSON 加载，无配置回调）
         CreateMonoSingleton<VFXManager>("VFXManager", null);
+
+        // WindowManager（窗口配置在 BootstrapCoroutine 中注入）
+        CreateMonoSingleton<WindowManager>("WindowManager", null);
     }
 
     // ── 03_Core：业务系统（骨架版本：仅 SaveLoadSystem）──
@@ -218,11 +225,13 @@ public class AppMain : MonoBehaviour
         registered += CheckAndLog<AudioManager>("AudioManager", ref total);
         registered += CheckAndLog<UIManager>("UIManager", ref total);
         registered += CheckAndLog<VFXManager>("VFXManager", ref total);
+        registered += CheckAndLog<WindowManager>("WindowManager", ref total);
 
         Debug.Log("[AppMain] ── Data Services ──");
         registered += CheckAndLog<IResourceCacheConfigDataService>("IResourceCacheConfigDataService", ref total);
         registered += CheckAndLog<IAudioCatalogDataService>("IAudioCatalogDataService", ref total);
         registered += CheckAndLog<IVFXCataLogDataService>("IVFXCataLogDataService", ref total);
+        registered += CheckAndLog<IWindowConfigDataService>("IWindowConfigDataService", ref total);
 
         Debug.Log("[AppMain] ── Core Systems ──");
         registered += CheckAndLog<SaveLoadSystem>("SaveLoadSystem", ref total);

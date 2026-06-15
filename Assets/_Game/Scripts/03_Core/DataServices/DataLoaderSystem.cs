@@ -55,6 +55,9 @@ public class DataLoaderSystem : MonoBehaviour, ISystem
 
         // ── 特效 ──
         CreateAndAdd<VFXCataLogDataService>("VFXCataLogDataService");
+
+        // ── 窗口配置 ──
+        CreateAndAdd<WindowConfigDataService>("WindowConfigDataService");
     }
 
     /// <summary>创建单个数据服务 GameObject 并加入列表</summary>

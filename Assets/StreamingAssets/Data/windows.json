@@ -1,0 +1,13 @@
+[
+  {
+    "windowId": "ExampleWindow",
+    "windowClass": "ExampleWindow",
+    "prefabPath": "UI/Windows/ExampleWindow",
+    "openAnimType": "ScaleIn",
+    "openAnimDuration": 0.25,
+    "closeAnimType": "FadeOut",
+    "closeAnimDuration": 0.15,
+    "defaultSortingOrder": 100,
+    "bringToFrontOnFocus": true
+  }
+]

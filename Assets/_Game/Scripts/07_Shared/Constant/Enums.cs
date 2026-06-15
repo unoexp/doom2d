@@ -542,3 +542,21 @@ public enum ExpansionTargetContainer
     QuickAccess     = 1,    // 快捷栏
     Both            = 2,    // 两者皆适用
 }
+
+// ─────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// 窗口打开/关闭动画类型。用于 WindowManager 的 UIWindow 动画系统。
+/// </summary>
+public enum WindowAnimationType
+{
+    None            = 0,    // 无动画，直接显示/隐藏
+    FadeIn          = 1,    // 淡入（CanvasGroup alpha 0→1）
+    FadeOut         = 2,    // 淡出（CanvasGroup alpha 1→0）
+    SlideFromRight  = 3,    // 从右侧滑入
+    SlideFromLeft   = 4,    // 从左侧滑入
+    SlideFromTop    = 5,    // 从上方滑入
+    SlideFromBottom = 6,    // 从下方滑入
+    ScaleIn         = 7,    // 缩放弹入（0→1 弹性曲线）
+    ScaleOut        = 8,    // 缩放退出（1→0 弹性曲线）
+}

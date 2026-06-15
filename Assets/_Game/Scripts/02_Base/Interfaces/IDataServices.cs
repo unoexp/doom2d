@@ -21,3 +21,11 @@ public interface IVFXCataLogDataService
     VFXCatalogData GetCatalog();
     System.Collections.Generic.IReadOnlyList<VFXEntryData> GetAllEntries();
 }
+
+/// <summary>窗口配置数据服务接口</summary>
+public interface IWindowConfigDataService
+{
+    System.Collections.Generic.IReadOnlyList<WindowConfigEntryData> GetAllEntries();
+    WindowConfigEntryData GetByWindowId(string windowId);
+    bool TryGetByWindowId(string windowId, out WindowConfigEntryData data);
+}

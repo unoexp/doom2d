@@ -55,14 +55,22 @@ public class AudioCatalogDataService : JsonDataService<AudioCatalogData>, IAudio
             // 移除 UTF-8 BOM（﻿，部分编辑器自动添加）
             text = text.TrimStart('﻿');
 
-            // 兼容两种格式：Excel 转换器输出数组 [{...}]，手写 JSON 为包装对象 {"entries": [...]}
-            if (text.StartsWith("["))
+            // 兼容三种格式：列式（条目数组） → 旧数组 [{...}] → 包装对象 {"entries": [...]}
+            if (ColumnTableConverter.IsColumnTableFormat(text))
             {
+                // 列式格式：columns 对应 AudioEntryData 字段
+                var entries = ColumnTableConverter.DeserializeColumnTable<AudioEntryData>(text, settings);
+                _catalog = new AudioCatalogData { Entries = entries?.ToArray() ?? System.Array.Empty<AudioEntryData>() };
+            }
+            else if (text.StartsWith("["))
+            {
+                // 旧数组格式：[{...}]
                 var entries = JsonConvert.DeserializeObject<List<AudioEntryData>>(text, settings);
                 _catalog = new AudioCatalogData { Entries = entries?.ToArray() ?? System.Array.Empty<AudioEntryData>() };
             }
             else
             {
+                // 旧包装格式：{"entries": [...]}
                 _catalog = JsonConvert.DeserializeObject<AudioCatalogData>(text, settings);
             }
 

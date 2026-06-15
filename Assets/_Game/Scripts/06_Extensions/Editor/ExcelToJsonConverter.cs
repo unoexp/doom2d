@@ -78,21 +78,21 @@ public static class ExcelToJsonConverter
             string fileName = Path.GetFileNameWithoutExtension(xlsxPath);
             try
             {
-                List<JObject> rows = ParseXlsx(xlsxPath);
+                List<JObject> rows = ParseXlsx(xlsxPath, out var columnMapping);
                 if (rows.Count == 0)
                 {
                     Debug.LogWarning($"[ExcelToJson] {fileName}.xlsx 没有数据行（第3行起）。");
                 }
 
-                // 写入 JSON
+                // 写入列式 JSON
                 string jsonPath = Path.Combine(fullOutputDir, fileName + ".json");
-                WriteJsonArray(jsonPath, rows);
+                WriteColumnTable(jsonPath, columnMapping, rows);
 
                 totalFiles++;
                 totalRows += rows.Count;
                 summaryBuilder.AppendLine($"  {fileName}.json — {rows.Count} 条数据");
 
-                Debug.Log($"[ExcelToJson] ✓ {fileName}.xlsx → {fileName}.json ({rows.Count} 行)");
+                Debug.Log($"[ExcelToJson] ✓ {fileName}.xlsx → {fileName}.json ({rows.Count} 行，列式格式)");
             }
             catch (Exception ex)
             {
@@ -119,7 +119,7 @@ public static class ExcelToJsonConverter
     /// <summary>
     /// 解析一个 .xlsx 文件，返回 JSON 对象列表。
     /// </summary>
-    private static List<JObject> ParseXlsx(string filePath)
+    private static List<JObject> ParseXlsx(string filePath, out Dictionary<int, string> columnIndexToFieldName)
     {
         var rows = new List<JObject>();
 
@@ -159,11 +159,12 @@ public static class ExcelToJsonConverter
             if (rawRows.Count < 3)
             {
                 // 至少需要表头行 + 注释行 + 1 行数据
+                columnIndexToFieldName = new Dictionary<int, string>();
                 return rows;
             }
 
             // ── 3. 解析表头（第 1 行） ──
-            Dictionary<int, string> columnIndexToFieldName = ParseHeaderRow(rawRows[0], sharedStrings);
+            columnIndexToFieldName = ParseHeaderRow(rawRows[0], sharedStrings);
 
             // ── 4. 跳过第 2 行（中文注释），从第 3 行起解析数据 ──
             for (int i = 2; i < rawRows.Count; i++)
@@ -483,20 +484,45 @@ public static class ExcelToJsonConverter
     // ✂️────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 将 JSON 对象数组写入文件（格式化的 JSON 数组）。
+    /// 将数据以列式 JSON 格式写入文件。
+    /// 格式：{"columns": [...], "rows": [[...], ...]}，键名只定义一次。
     /// </summary>
-    private static void WriteJsonArray(string filePath, List<JObject> rows)
+    private static void WriteColumnTable(string filePath, Dictionary<int, string> columnIndexToFieldName, List<JObject> rows)
     {
-        var array = new JArray(rows);
+        // ── 按列索引排序构建有序列名列表 ──
+        var orderedColumns = columnIndexToFieldName
+            .OrderBy(kv => kv.Key)
+            .Select(kv => kv.Value)
+            .ToList();
 
-        // 格式化写入
+        // ── 构建行数据（按列顺序提取值，缺失的填 null） ──
+        var rowArrays = new JArray();
+        foreach (var obj in rows)
+        {
+            var rowArray = new JArray();
+            foreach (string colName in orderedColumns)
+            {
+                JToken value = obj[colName];
+                rowArray.Add(value ?? JValue.CreateNull());
+            }
+            rowArrays.Add(rowArray);
+        }
+
+        // ── 构建输出结构 ──
+        var output = new JObject
+        {
+            ["columns"] = new JArray(orderedColumns),
+            ["rows"] = rowArrays
+        };
+
+        // ── 格式化写入 ──
         using (var writer = new StreamWriter(filePath, false, Encoding.UTF8))
         using (var jsonWriter = new JsonTextWriter(writer))
         {
             jsonWriter.Formatting = Formatting.Indented;
             jsonWriter.Indentation = 2;
             jsonWriter.IndentChar = ' ';
-            array.WriteTo(jsonWriter);
+            output.WriteTo(jsonWriter);
         }
     }
 }
