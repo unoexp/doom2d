@@ -14,3 +14,10 @@ public interface IAudioCatalogDataService
     AudioCatalogData GetCatalog();
     System.Collections.Generic.IReadOnlyList<AudioEntryData> GetAllEntries();
 }
+
+/// <summary>特效目录数据服务接口</summary>
+public interface IVFXCataLogDataService
+{
+    VFXCatalogData GetCatalog();
+    System.Collections.Generic.IReadOnlyList<VFXEntryData> GetAllEntries();
+}

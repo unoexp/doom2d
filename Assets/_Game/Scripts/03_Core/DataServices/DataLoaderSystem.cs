@@ -52,6 +52,9 @@ public class DataLoaderSystem : MonoBehaviour, ISystem
 
         // ── 音频 ──
         CreateAndAdd<AudioCatalogDataService>("AudioCatalogDataService");
+
+        // ── 特效 ──
+        CreateAndAdd<VFXCataLogDataService>("VFXCataLogDataService");
     }
 
     /// <summary>创建单个数据服务 GameObject 并加入列表</summary>

@@ -48,7 +48,18 @@ public class ResourceCacheConfigDataService : JsonDataService<ResourceCacheConfi
                 MissingMemberHandling = MissingMemberHandling.Ignore
             };
 
-            _config = JsonConvert.DeserializeObject<ResourceCacheConfigData>(www.downloadHandler.text, settings);
+            string text = www.downloadHandler.text.TrimStart();
+
+            // 兼容两种格式：手写 JSON 为单例对象 {...}，Excel 转换器输出单元素数组 [{...}]
+            if (text.StartsWith("["))
+            {
+                var list = JsonConvert.DeserializeObject<List<ResourceCacheConfigData>>(text, settings);
+                _config = (list != null && list.Count > 0) ? list[0] : new ResourceCacheConfigData();
+            }
+            else
+            {
+                _config = JsonConvert.DeserializeObject<ResourceCacheConfigData>(text, settings);
+            }
             _allData = new List<ResourceCacheConfigData> { _config };
             _dataMap.Clear();
             if (_config != null)

@@ -1,6 +1,10 @@
 // ══════════════════════════════════════════════════════════════════════
 // 📁 Assets/_Game/05_Show/VFX/VFXManager.cs
 // 特效管理器。管理粒子特效的播放、对象池回收。
+// ─────────────────────────────────────────────────────────────────────
+// [JSON 配表重构] 特效目录由 vfx_catalog.json 配置，不再通过 Inspector
+//   拖拽 VFXEntry[]。prefabPath 为 Resources 目录下的相对路径，
+//   通过 ResourceManager.Load<GameObject> 加载预制体。
 // ══════════════════════════════════════════════════════════════════════
 using System.Collections.Generic;
 using UnityEngine;
@@ -9,7 +13,8 @@ using UnityEngine;
 /// 特效管理器。
 ///
 /// 核心职责：
-///   · 通过特效ID播放粒子特效（ID对应VFXCatalog中的注册条目）
+///   · 从 JSON 配表加载特效目录（vfxId → prefabPath）
+///   · 通过特效ID播放粒子特效
 ///   · 管理特效实例的对象池，避免频繁创建/销毁
 ///   · 支持跟随目标的特效和世界坐标特效
 ///   · 自动回收播放完毕的特效实例
@@ -18,6 +23,7 @@ using UnityEngine;
 ///   · 继承 MonoSingleton，全局唯一
 ///   · 同时注册到 ServiceLocator
 ///   · 表现层组件，不包含业务逻辑
+///   · 特效预制体通过 ResourceManager 按路径加载，首次使用时懒初始化
 /// </summary>
 public class VFXManager : MonoSingleton<VFXManager>
 {
@@ -25,16 +31,17 @@ public class VFXManager : MonoSingleton<VFXManager>
     // 配置
     // ══════════════════════════════════════════════════════
 
-    public VFXEntry[] Catalog { get; set; }
-
     public int DefaultPoolSize { get; set; } = 3;
 
     // ══════════════════════════════════════════════════════
     // 数据
     // ══════════════════════════════════════════════════════
 
-    /// <summary>特效ID → 预制体</summary>
-    private readonly Dictionary<string, GameObject> _prefabMap
+    /// <summary>特效ID → Resources 路径（从 JSON 配表加载）</summary>
+    private Dictionary<string, string> _pathMap;
+
+    /// <summary>特效ID → 已加载的预制体缓存</summary>
+    private readonly Dictionary<string, GameObject> _prefabCache
         = new Dictionary<string, GameObject>();
 
     /// <summary>特效ID → 对象池</summary>
@@ -44,6 +51,9 @@ public class VFXManager : MonoSingleton<VFXManager>
     /// <summary>当前播放中的特效（用于自动回收）</summary>
     private readonly List<ActiveVFX> _activeFX = new List<ActiveVFX>();
 
+    /// <summary>目录是否已构建</summary>
+    private bool _catalogBuilt;
+
     // ══════════════════════════════════════════════════════
     // 生命周期
     // ══════════════════════════════════════════════════════
@@ -51,27 +61,16 @@ public class VFXManager : MonoSingleton<VFXManager>
     protected override void Awake()
     {
         base.Awake();
-        // [AppMain 重构] 仅注册 ServiceLocator，目录构建移至 Initialize()
         ServiceLocator.Register<VFXManager>(this);
     }
 
-    /// <summary>配置注入后的目录构建（ISystem）</summary>
+    /// <summary>配置注入后的初始化（ISystem）</summary>
     public override void Initialize()
     {
         InitSingleton();
 
-        // 构建目录
-        if (Catalog != null)
-        {
-            for (int i = 0; i < Catalog.Length; i++)
-            {
-                var entry = Catalog[i];
-                if (entry.Prefab == null || string.IsNullOrEmpty(entry.VFXId)) continue;
-                _prefabMap[entry.VFXId] = entry.Prefab;
-            }
-        }
-
-        Debug.Log($"[VFXManager] 完整初始化完成（{_prefabMap.Count} 个特效已注册）");
+        // 目录构建延迟到首次使用（Initialize 在数据加载前执行）
+        Debug.Log($"[VFXManager] 初始化完成（目录将在首次 Play 时构建）");
     }
 
     /// <summary>系统关闭清理（ISystem）</summary>
@@ -81,6 +80,58 @@ public class VFXManager : MonoSingleton<VFXManager>
         ServiceLocator.Unregister<VFXManager>();
         Debug.Log("[VFXManager] 已关闭");
         base.Shutdown();
+    }
+
+    // ══════════════════════════════════════════════════════
+    // 目录构建（懒初始化）
+    // ══════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 确保特效目录已构建。
+    /// 从 IVFXCataLogDataService 读取 JSON 配表数据，
+    /// 构建 vfxId → prefabPath 的映射表。
+    /// </summary>
+    private void EnsureCatalogBuilt()
+    {
+        if (_catalogBuilt) return;
+
+        if (!ServiceLocator.TryGet<IVFXCataLogDataService>(out var dataService))
+        {
+            Debug.LogWarning("[VFXManager] IVFXCataLogDataService 尚未就绪，无法构建目录");
+            return;
+        }
+
+        var catalog = dataService.GetCatalog();
+        _pathMap = new Dictionary<string, string>();
+
+        if (catalog?.Entries != null)
+        {
+            foreach (var entry in catalog.Entries)
+            {
+                if (!string.IsNullOrEmpty(entry.VFXId) && !string.IsNullOrEmpty(entry.PrefabPath))
+                    _pathMap[entry.VFXId] = entry.PrefabPath;
+            }
+        }
+
+        _catalogBuilt = true;
+        Debug.Log($"[VFXManager] 特效目录已构建，共 {_pathMap.Count} 条");
+    }
+
+    /// <summary>
+    /// 获取特效预制体（带缓存）。
+    /// 首次访问时通过 ResourceManager 加载并缓存。
+    /// </summary>
+    private GameObject GetPrefab(string vfxId, string path)
+    {
+        if (_prefabCache.TryGetValue(vfxId, out var cached))
+            return cached;
+
+        var prefab = ResourceManager.Instance.Load<GameObject>(path);
+        if (prefab != null)
+        {
+            _prefabCache[vfxId] = prefab;
+        }
+        return prefab;
     }
 
     private void Update()
@@ -115,7 +166,7 @@ public class VFXManager : MonoSingleton<VFXManager>
     // ══════════════════════════════════════════════════════
 
     /// <summary>在世界坐标播放特效</summary>
-    /// <param name="vfxId">特效ID</param>
+    /// <param name="vfxId">特效ID（对应 vfx_catalog.json 中的 vfxId）</param>
     /// <param name="position">世界坐标</param>
     /// <param name="rotation">旋转</param>
     /// <returns>播放中的 ParticleSystem（可能为 null）</returns>
@@ -141,7 +192,7 @@ public class VFXManager : MonoSingleton<VFXManager>
     }
 
     /// <summary>跟随目标播放特效</summary>
-    /// <param name="vfxId">特效ID</param>
+    /// <param name="vfxId">特效ID（对应 vfx_catalog.json 中的 vfxId）</param>
     /// <param name="target">跟随目标</param>
     /// <param name="offset">相对偏移</param>
     public ParticleSystem PlayFollow(string vfxId, Transform target, Vector2 offset = default)
@@ -186,15 +237,24 @@ public class VFXManager : MonoSingleton<VFXManager>
 
     private ParticleSystem GetFromPool(string vfxId)
     {
-        if (!_prefabMap.TryGetValue(vfxId, out var prefab))
+        EnsureCatalogBuilt();
+
+        if (_pathMap == null || !_pathMap.TryGetValue(vfxId, out var path))
         {
             Debug.LogWarning($"[VFXManager] 未注册的特效ID: {vfxId}");
             return null;
         }
 
+        var prefab = GetPrefab(vfxId, path);
+        if (prefab == null)
+        {
+            Debug.LogWarning($"[VFXManager] 无法加载特效预制体: {path}");
+            return null;
+        }
+
         if (!_pools.TryGetValue(vfxId, out var pool))
         {
-            pool = new Queue<ParticleSystem>();
+            pool = new Queue<ParticleSystem>(DefaultPoolSize);
             _pools[vfxId] = pool;
         }
 
@@ -209,7 +269,7 @@ public class VFXManager : MonoSingleton<VFXManager>
             particle = go.GetComponent<ParticleSystem>();
             if (particle == null)
             {
-                Debug.LogWarning($"[VFXManager] 预制体 {vfxId} 缺少 ParticleSystem 组件");
+                Debug.LogWarning($"[VFXManager] 预制体 {vfxId}（{path}）缺少 ParticleSystem 组件");
                 Destroy(go);
                 return null;
             }
@@ -226,7 +286,7 @@ public class VFXManager : MonoSingleton<VFXManager>
 
         if (!_pools.TryGetValue(vfxId, out var pool))
         {
-            pool = new Queue<ParticleSystem>();
+            pool = new Queue<ParticleSystem>(DefaultPoolSize);
             _pools[vfxId] = pool;
         }
 
@@ -245,17 +305,4 @@ public class VFXManager : MonoSingleton<VFXManager>
         public Transform FollowTarget;
         public Vector2 Offset;
     }
-}
-
-/// <summary>
-/// 特效目录条目（Inspector 配置）
-/// </summary>
-[System.Serializable]
-public struct VFXEntry
-{
-    [Tooltip("特效ID")]
-    public string VFXId;
-
-    [Tooltip("特效预制体（需包含 ParticleSystem）")]
-    public GameObject Prefab;
 }

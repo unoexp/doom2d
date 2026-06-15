@@ -24,11 +24,10 @@ using UnityEngine;
 public class AppMain : MonoBehaviour
 {
     // ══════════════════════════════════════════════════════
-    // 配置（仅保留非数据 SO 的运行时参数）
+    // 配置
     // ══════════════════════════════════════════════════════
-
-    [Header("VFXManager")]
-    [SerializeField] private VFXEntry[] _vfxCatalog;
+    // 💡 骨架版本所有配置均走 JSON 配表（DataLoaderSystem），
+    //    AppMain Inspector 无需配置任何字段。
 
     // ══════════════════════════════════════════════════════
     // 运行时
@@ -75,9 +74,22 @@ public class AppMain : MonoBehaviour
         _dataLoader = CreateSystem<DataLoaderSystem>("DataLoaderSystem");
         yield return _dataLoader.LoadAllDataAsync();
 
-        Debug.Log("[AppMain] ── 数据加载完成，创建业务系统 ──");
+        Debug.Log("[AppMain] ── 数据加载完成，注入配置到 Base 系统 ──");
 
-        // Phase 2: 创建 Core 业务系统（骨架版本：仅 SaveLoadSystem）
+        // Phase 2: 注入数据依赖配置到 MonoSingletons
+        {
+            var rm = ServiceLocator.Get<ResourceManager>();
+            rm.CacheConfig = ServiceLocator.Get<IResourceCacheConfigDataService>().GetConfig();
+            rm.Initialize();
+
+            var am = ServiceLocator.Get<AudioManager>();
+            am.Catalogs = new[] { ServiceLocator.Get<IAudioCatalogDataService>().GetCatalog() };
+            am.Initialize();
+        }
+
+        Debug.Log("[AppMain] ── 创建业务系统 ──");
+
+        // Phase 3: 创建 Core 业务系统（骨架版本：仅 SaveLoadSystem）
         CreateCoreSystems();
 
         Debug.Log("[AppMain] ========== 所有系统创建完毕 ==========");
@@ -125,29 +137,17 @@ public class AppMain : MonoBehaviour
         // ObjectPoolManager（无配置）
         CreateMonoSingleton<ObjectPoolManager>("ObjectPoolManager", null);
 
-        // ResourceManager（配置从 JSON 加载，在 DataLoaderSystem 中处理）
-        CreateMonoSingleton<ResourceManager>("ResourceManager", rm =>
-        {
-            rm.CacheConfig = ServiceLocator.Get<IResourceCacheConfigDataService>().GetConfig();
-            rm.Initialize();
-        });
+        // ResourceManager（数据依赖配置在 BootstrapCoroutine 中注入）
+        CreateMonoSingleton<ResourceManager>("ResourceManager", null);
 
-        // AudioManager（音频目录从 JSON 加载，AudioClip 按 ClipPath 动态加载）
-        CreateMonoSingleton<AudioManager>("AudioManager", am =>
-        {
-            am.Catalogs = new[] { ServiceLocator.Get<IAudioCatalogDataService>().GetCatalog() };
-            am.Initialize();
-        });
+        // AudioManager（数据依赖配置在 BootstrapCoroutine 中注入）
+        CreateMonoSingleton<AudioManager>("AudioManager", null);
 
         // UIManager（无配置）
         CreateMonoSingleton<UIManager>("UIManager", null);
 
-        // VFXManager（有配置 — VFXEntry 保留，因涉及 Unity GameObject 资源）
-        CreateMonoSingleton<VFXManager>("VFXManager", vm =>
-        {
-            vm.Catalog = _vfxCatalog;
-            vm.Initialize();
-        });
+        // VFXManager（特效目录从 JSON 加载，无配置回调）
+        CreateMonoSingleton<VFXManager>("VFXManager", null);
     }
 
     // ── 03_Core：业务系统（骨架版本：仅 SaveLoadSystem）──
@@ -221,6 +221,7 @@ public class AppMain : MonoBehaviour
         Debug.Log("[AppMain] ── Data Services ──");
         registered += CheckAndLog<IResourceCacheConfigDataService>("IResourceCacheConfigDataService", ref total);
         registered += CheckAndLog<IAudioCatalogDataService>("IAudioCatalogDataService", ref total);
+        registered += CheckAndLog<IVFXCataLogDataService>("IVFXCataLogDataService", ref total);
 
         Debug.Log("[AppMain] ── Core Systems ──");
         registered += CheckAndLog<SaveLoadSystem>("SaveLoadSystem", ref total);

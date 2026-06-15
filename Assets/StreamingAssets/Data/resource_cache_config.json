@@ -1,0 +1,15 @@
+﻿[
+  {
+    "maxcacheitems": 100,
+    "maxmemoryusagemb": 256,
+    "memorywarningthresholdmb": 200,
+    "cachecleanupinterval": 60,
+    "cacheitemtimeout": 300,
+    "downloadretrycount": 3,
+    "downloadtimeoutseconds": 30,
+    "downloadchunksizekb": 256,
+    "maxconcurrentdownloads": 2,
+    "localbundledirectory": "AssetBundles",
+    "bundlecachedirectory": "BundleCache"
+  }
+]
