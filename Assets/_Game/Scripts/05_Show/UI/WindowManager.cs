@@ -4,13 +4,14 @@
 // ─────────────────────────────────────────────────────────────────────
 // 职责：
 //   · 从 JSON 配置表加载窗口定义（IWindowConfigDataService）
-//   · 实例化窗口预制体并管理 UIWindow 实例生命周期
+//   · 实例化窗口预制体并通过 Activator.CreateInstance 构造纯 C# 窗口实例
 //   · 管理窗口的 Canvas sortingOrder（z-order）
 //   · 发布窗口生命周期事件
 //
 // 设计说明：
 //   · 继承 MonoSingleton，全局唯一，同时注册到 ServiceLocator
 //   · 与 UIManager 完全独立 — UIManager 管栈式面板，WindowManager 管独立窗口
+//   · UIWindow 为纯 C# 类（不继承 MonoBehaviour），由 WindowManager 管理生命周期
 //   · 窗口预制体从 Resources 目录加载（通过 ResourceManager）
 //   · 动画参数从配置表查询后传入 UIWindow
 //
@@ -18,6 +19,7 @@
 //   var wm = ServiceLocator.Get<WindowManager>();
 //   wm.OpenWindow("InventoryWindow");
 // ══════════════════════════════════════════════════════════════════════
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -26,8 +28,8 @@ using UnityEngine;
 ///
 /// 核心数据流：
 ///   AppMain 注入 IWindowConfigDataService → Initialize() 构建配置映射
-///   → OpenWindow(id) 加载预制体 → UIWindow.Open(anim) → 播放入场动画
-///   → CloseWindow(id) → UIWindow.Close(anim) → 播放退场动画 → Destroy
+///   → OpenWindow(id) 加载预制体 → new WindowType(go, id) → UIWindow.Open(anim) → 播放入场动画
+///   → CloseWindow(id) → UIWindow.Close(anim) → 播放退场动画 → Shutdown → Destroy
 /// </summary>
 public class WindowManager : MonoSingleton<WindowManager>
 {
@@ -119,7 +121,8 @@ public class WindowManager : MonoSingleton<WindowManager>
             if (kvp.Value != null)
             {
                 kvp.Value.OnClosed();
-                Destroy(kvp.Value.gameObject);
+                kvp.Value.Shutdown();
+                Destroy(kvp.Value.Root);
             }
         }
         _openWindows.Clear();
@@ -217,7 +220,7 @@ public class WindowManager : MonoSingleton<WindowManager>
             goCanvas.overrideSorting = true;
         }
 
-        // 通过窗口类名解析具体 Type，动态挂载窗口组件
+        // 通过窗口类名解析具体 Type，构造纯 C# 窗口实例
         if (!TryResolveWindowType(config.WindowClass, out var windowType))
         {
             Debug.LogError($"[WindowManager] 无法解析窗口类: {config.WindowClass} (windowId={windowId})");
@@ -225,10 +228,7 @@ public class WindowManager : MonoSingleton<WindowManager>
             return;
         }
 
-        var window = (UIWindow)go.AddComponent(windowType);
-
-        // 设置窗口标识
-        window.SetWindowId(windowId);
+        var window = (UIWindow)Activator.CreateInstance(windowType, go, windowId);
 
         // 设置初始 sortingOrder
         _currentMaxSortingOrder = Mathf.Max(_currentMaxSortingOrder, config.DefaultSortingOrder);
@@ -274,12 +274,13 @@ public class WindowManager : MonoSingleton<WindowManager>
         _openWindows.Remove(windowId);
         _windowOrder.Remove(window);
 
-        // 关闭窗口（含动画），动画完成后销毁实例并发布事件
+        // 关闭窗口（含动画），动画完成后清理并销毁实例
         window.Close(closeAnim, closeDur, () =>
         {
             if (window != null)
             {
-                Destroy(window.gameObject);
+                window.Shutdown();
+                Destroy(window.Root);
             }
             EventBus.Publish(new WindowClosedEvent { WindowId = windowId });
         });
@@ -312,7 +313,9 @@ public class WindowManager : MonoSingleton<WindowManager>
 
         if (window != null)
         {
-            Destroy(window.gameObject);
+            window.OnClosed();
+            window.Shutdown();
+            Destroy(window.Root);
         }
 
         EventBus.Publish(new WindowClosedEvent { WindowId = windowId });

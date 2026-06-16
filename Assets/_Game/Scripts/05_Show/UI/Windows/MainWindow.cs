@@ -11,26 +11,29 @@ using UnityEngine;
 public class MainWindow : UIWindow
 {
     // ══════════════════════════════════════════════════════
-    // 序列化字段
+    // UI 控件引用
     // ══════════════════════════════════════════════════════
 
-    [Header("主窗口配置")]
-    [Tooltip("背景图片")]
-    [SerializeField] private UnityEngine.UI.Image _backgroundImage;
+    private readonly UnityEngine.UI.Image _backgroundImage;
 
     // ══════════════════════════════════════════════════════
-    // 生命周期
+    // 构造函数
     // ══════════════════════════════════════════════════════
 
-    protected override void Awake()
+    /// <summary>
+    /// 构造 MainWindow。
+    /// WindowManager 通过 Activator.CreateInstance 调用此构造函数。
+    /// </summary>
+    /// <param name="root">窗口根 GameObject</param>
+    /// <param name="windowId">窗口唯一标识</param>
+    public MainWindow(GameObject root, string windowId) : base(root, windowId)
     {
-        base.Awake();
-
-        if (_backgroundImage == null)
-        {
-            _backgroundImage = GetComponentInChildren<UnityEngine.UI.Image>();
-        }
+        _backgroundImage = Root.GetComponentInChildren<UnityEngine.UI.Image>();
     }
+
+    // ══════════════════════════════════════════════════════
+    // 生命周期回调
+    // ══════════════════════════════════════════════════════
 
     protected override void OnOpened()
     {
