@@ -1,13 +1,26 @@
-[
-  {
-    "windowId": "ExampleWindow",
-    "windowClass": "ExampleWindow",
-    "prefabPath": "UI/Windows/ExampleWindow",
-    "openAnimType": "ScaleIn",
-    "openAnimDuration": 0.25,
-    "closeAnimType": "FadeOut",
-    "closeAnimDuration": 0.15,
-    "defaultSortingOrder": 100,
-    "bringToFrontOnFocus": true
-  }
-]
+﻿{
+  "columns": [
+    "windowid",
+    "windowclass",
+    "prefabpath",
+    "openanimtype",
+    "openanimduration",
+    "closeanimtype",
+    "closeanimduration",
+    "defaultsortingorder",
+    "bringtofrontonfocus"
+  ],
+  "rows": [
+    [
+      "main_window",
+      "MainWindow",
+      "Prefabs/Windows/main_window",
+      "FadeIn",
+      0.35,
+      "FadeOut",
+      0.2,
+      50,
+      null
+    ]
+  ]
+}

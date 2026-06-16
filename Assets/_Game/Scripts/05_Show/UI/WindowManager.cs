@@ -18,7 +18,6 @@
 //   var wm = ServiceLocator.Get<WindowManager>();
 //   wm.OpenWindow("InventoryWindow");
 // ══════════════════════════════════════════════════════════════════════
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -63,6 +62,17 @@ public class WindowManager : MonoSingleton<WindowManager>
     /// <summary>配置已构建完成</summary>
     private bool _configBuilt;
 
+    /// <summary>
+    /// 窗口类名 → 具体 Type 的静态注册表。
+    /// 新增窗口类时在此注册一行，WindowManager 通过此表解析 windowClass 配置。
+    /// 使用编译期 typeof 保证 IL2CPP 安全（不依赖反射）。
+    /// </summary>
+    private static readonly Dictionary<string, System.Type> WindowClassRegistry
+        = new Dictionary<string, System.Type>
+        {
+            { "MainWindow", typeof(MainWindow) },
+        };
+
     // ══════════════════════════════════════════════════════
     // 生命周期
     // ══════════════════════════════════════════════════════
@@ -93,11 +103,27 @@ public class WindowManager : MonoSingleton<WindowManager>
     /// <summary>系统关闭清理（ISystem）</summary>
     public override void Shutdown()
     {
-        CloseAllWindows();
+        // 关机时直接同步销毁所有窗口（跳过 DOTween 动画，避免 "GameObject is inactive" 错误）
+        DestroyAllWindowsImmediate();
         _configMap.Clear();
         ServiceLocator.Unregister<WindowManager>();
         Debug.Log("[WindowManager] 已关闭");
         base.Shutdown();
+    }
+
+    /// <summary>立即销毁所有窗口实例（关机清理用，无动画）</summary>
+    private void DestroyAllWindowsImmediate()
+    {
+        foreach (var kvp in _openWindows)
+        {
+            if (kvp.Value != null)
+            {
+                kvp.Value.OnClosed();
+                Destroy(kvp.Value.gameObject);
+            }
+        }
+        _openWindows.Clear();
+        _windowOrder.Clear();
     }
 
     // ══════════════════════════════════════════════════════
@@ -173,13 +199,15 @@ public class WindowManager : MonoSingleton<WindowManager>
         var go = Instantiate(prefab, WindowContainer);
         go.name = windowId;
 
-        var window = go.GetComponent<UIWindow>();
-        if (window == null)
+        // 通过窗口类名解析具体 Type，动态挂载窗口组件
+        if (!TryResolveWindowType(config.WindowClass, out var windowType))
         {
-            Debug.LogError($"[WindowManager] 预制体 {config.PrefabPath} 缺少 UIWindow 组件");
+            Debug.LogError($"[WindowManager] 无法解析窗口类: {config.WindowClass} (windowId={windowId})");
             Destroy(go);
             return;
         }
+
+        var window = (UIWindow)go.AddComponent(windowType);
 
         // 设置窗口标识
         window.SetWindowId(windowId);
@@ -196,25 +224,11 @@ public class WindowManager : MonoSingleton<WindowManager>
         var openAnim = ParseAnimationType(config.OpenAnimType);
         var openDur = config.OpenAnimDuration > 0f ? config.OpenAnimDuration : 0.2f;
 
-        // 打开窗口（含动画）
-        window.Open(openAnim, openDur);
-
-        // 动画完成后发布事件
-        StartCoroutine(OnOpenComplete(windowId, openDur));
-    }
-
-    /// <summary>等待打开动画完成后发布事件</summary>
-    private IEnumerator OnOpenComplete(string windowId, float duration)
-    {
-        if (duration > 0f)
-        {
-            yield return new WaitForSecondsRealtime(duration);
-        }
-
-        if (_openWindows.TryGetValue(windowId, out var window))
+        // 打开窗口（含动画），动画完成后发布事件
+        window.Open(openAnim, openDur, () =>
         {
             EventBus.Publish(new WindowOpenedEvent { WindowId = windowId });
-        }
+        });
     }
 
     /// <summary>关闭指定窗口</summary>
@@ -242,27 +256,15 @@ public class WindowManager : MonoSingleton<WindowManager>
         _openWindows.Remove(windowId);
         _windowOrder.Remove(window);
 
-        // 关闭窗口（含动画）
-        window.Close(closeAnim, closeDur);
-
-        // 动画完成后销毁
-        StartCoroutine(DestroyAfterClose(windowId, window, closeDur));
-    }
-
-    /// <summary>等待关闭动画完成后销毁实例</summary>
-    private IEnumerator DestroyAfterClose(string windowId, UIWindow window, float duration)
-    {
-        if (duration > 0f)
+        // 关闭窗口（含动画），动画完成后销毁实例并发布事件
+        window.Close(closeAnim, closeDur, () =>
         {
-            yield return new WaitForSecondsRealtime(duration);
-        }
-
-        if (window != null)
-        {
-            Destroy(window.gameObject);
-        }
-
-        EventBus.Publish(new WindowClosedEvent { WindowId = windowId });
+            if (window != null)
+            {
+                Destroy(window.gameObject);
+            }
+            EventBus.Publish(new WindowClosedEvent { WindowId = windowId });
+        });
     }
 
     /// <summary>关闭所有窗口</summary>
@@ -403,5 +405,28 @@ public class WindowManager : MonoSingleton<WindowManager>
 
         Debug.LogWarning($"[WindowManager] 未知的动画类型: {typeStr}，使用 None");
         return WindowAnimationType.None;
+    }
+
+    /// <summary>
+    /// 从静态注册表解析窗口类名 → Type。
+    /// 新增窗口类时需在 WindowClassRegistry 中注册。
+    /// </summary>
+    /// <param name="windowClass">窗口类名（对应 JSON 配置中的 windowClass）</param>
+    /// <param name="type">解析成功时返回对应 Type</param>
+    /// <returns>是否解析成功</returns>
+    private static bool TryResolveWindowType(string windowClass, out System.Type type)
+    {
+        if (string.IsNullOrEmpty(windowClass))
+        {
+            Debug.LogWarning("[WindowManager] windowClass 为空，无法解析窗口类型");
+            type = null;
+            return false;
+        }
+
+        if (WindowClassRegistry.TryGetValue(windowClass, out type))
+            return true;
+
+        Debug.LogWarning($"[WindowManager] 未注册的窗口类: {windowClass}，请在 WindowClassRegistry 中添加映射");
+        return false;
     }
 }

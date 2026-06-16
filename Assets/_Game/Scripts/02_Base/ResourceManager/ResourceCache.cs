@@ -241,21 +241,15 @@ internal sealed class ResourceCache
     }
 
     /// <summary>
-    /// 清空所有缓存
+    /// 清空所有缓存（仅清空索引，不卸载资源 — Unity 会在退出时自行清理）。
+    /// 运行时逐项卸载请使用 Cleanup(force: true)。
     /// </summary>
     public void Clear()
     {
         lock (_lock)
         {
-            foreach (var kvp in _cacheMap)
-            {
-                var node = kvp.Value.Value;
-                if (node.Value != null)
-                {
-                    Resources.UnloadAsset(node.Value);
-                }
-            }
-
+            // 不调用 Resources.UnloadAsset：关机时 Unity 会自动清理；
+            // 逐项卸载已由 RemoveInternal + Cleanup(force:true) 覆盖。
             _cacheMap.Clear();
             _lruList.Clear();
             _currentMemoryUsageBytes = 0;

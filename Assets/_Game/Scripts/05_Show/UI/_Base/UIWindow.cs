@@ -13,7 +13,7 @@
 //   · 窗口预制体需包含 Canvas（overrideSorting=true）和 CanvasGroup
 //   · 动画类型和时长由 WindowManager 从配置表查询后传入
 // ══════════════════════════════════════════════════════════════════════
-using System.Collections;
+using System;
 using UnityEngine;
 
 /// <summary>
@@ -114,13 +114,16 @@ public abstract class UIWindow : MonoBehaviour
     /// 打开窗口（激活 + 播放入场动画）。
     /// WindowManager 调用此方法并传入从配置表查询的动画参数。
     /// </summary>
-    public void Open(WindowAnimationType animType, float duration)
+    /// <param name="animType">动画类型</param>
+    /// <param name="duration">动画时长（秒）</param>
+    /// <param name="onComplete">动画完成回调（含 OnOpened 之后）</param>
+    public void Open(WindowAnimationType animType, float duration, Action onComplete = null)
     {
         if (_isOpen) return;
         _isOpen = true;
 
         SetVisualClosed(); // 确保起始状态
-        StartCoroutine(PlayOpenAnimation(animType, duration));
+        PlayOpenAnimation(animType, duration, onComplete);
     }
 
     /// <summary>
@@ -128,12 +131,15 @@ public abstract class UIWindow : MonoBehaviour
     /// WindowManager 调用此方法启动关闭流程。
     /// 动画完成后会触发 OnClosed，由 WindowManager 负责 Destroy。
     /// </summary>
-    public void Close(WindowAnimationType animType, float duration)
+    /// <param name="animType">动画类型</param>
+    /// <param name="duration">动画时长（秒）</param>
+    /// <param name="onComplete">动画完成回调（含 OnClosed 之后）</param>
+    public void Close(WindowAnimationType animType, float duration, Action onComplete = null)
     {
         if (!_isOpen) return;
         _isOpen = false;
 
-        StartCoroutine(PlayCloseAnimation(animType, duration));
+        PlayCloseAnimation(animType, duration, onComplete);
     }
 
     /// <summary>
@@ -156,7 +162,7 @@ public abstract class UIWindow : MonoBehaviour
     protected virtual void OnOpened() { }
 
     /// <summary>窗口关闭动画完成后调用（销毁前最后一刻）。子类在此清理数据。</summary>
-    protected virtual void OnClosed() { }
+    public virtual void OnClosed() { }
 
     /// <summary>窗口获得焦点时调用。子类在此做视觉反馈。</summary>
     public virtual void OnFocusGained() { }
@@ -171,27 +177,37 @@ public abstract class UIWindow : MonoBehaviour
     public abstract void Bind(object viewModel);
 
     // ══════════════════════════════════════════════════════
-    // 动画协程
+    // 动画方法（DOTween 驱动，通过 onComplete 回调链式通知）
     // ══════════════════════════════════════════════════════
 
     /// <summary>
     /// 播放打开动画。子类可重写以实现自定义动画。
     /// 默认委托给 UIAnimationHelper.PlayOpenAnimation。
+    /// 动画完成后依次调用 OnOpened() → onComplete。
     /// </summary>
-    protected virtual IEnumerator PlayOpenAnimation(WindowAnimationType type, float duration)
+    protected virtual void PlayOpenAnimation(WindowAnimationType type, float duration,
+        Action onComplete = null)
     {
-        yield return UIAnimationHelper.PlayOpenAnimation(_canvasGroup, _rectTransform, type, duration);
-        OnOpened();
+        UIAnimationHelper.PlayOpenAnimation(_canvasGroup, _rectTransform, type, duration, () =>
+        {
+            OnOpened();
+            onComplete?.Invoke();
+        });
     }
 
     /// <summary>
     /// 播放关闭动画。子类可重写以实现自定义动画。
     /// 默认委托给 UIAnimationHelper.PlayCloseAnimation。
+    /// 动画完成后依次调用 OnClosed() → onComplete。
     /// </summary>
-    protected virtual IEnumerator PlayCloseAnimation(WindowAnimationType type, float duration)
+    protected virtual void PlayCloseAnimation(WindowAnimationType type, float duration,
+        Action onComplete = null)
     {
-        yield return UIAnimationHelper.PlayCloseAnimation(_canvasGroup, _rectTransform, type, duration);
-        OnClosed();
+        UIAnimationHelper.PlayCloseAnimation(_canvasGroup, _rectTransform, type, duration, () =>
+        {
+            OnClosed();
+            onComplete?.Invoke();
+        });
     }
 
     // ══════════════════════════════════════════════════════
@@ -207,6 +223,8 @@ public abstract class UIWindow : MonoBehaviour
             _canvasGroup.interactable = false;
             _canvasGroup.blocksRaycasts = false;
         }
-        gameObject.SetActive(false);
+        // 注意：不调用 gameObject.SetActive(false)。
+        // 窗口需要保持 active 以支持 DOTween 动画播放。
+        // 视觉效果通过 CanvasGroup 的 alpha + interactable + blocksRaycasts 完全控制。
     }
 }

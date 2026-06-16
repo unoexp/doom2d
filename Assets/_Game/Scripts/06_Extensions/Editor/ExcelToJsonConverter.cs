@@ -57,15 +57,34 @@ public static class ExcelToJsonConverter
             AssetDatabase.CreateFolder("Assets/StreamingAssets", "Data");
         }
 
-        // 获取所有 .xlsx 文件
+        // 获取所有 .xlsx 文件（排除 Excel 临时文件）
         string fullExcelDir = Path.GetFullPath(Path.Combine(Application.dataPath, "../", EXCEL_DIR));
         string fullOutputDir = Path.GetFullPath(Path.Combine(Application.dataPath, "../", OUTPUT_DIR));
 
         string[] xlsxFiles = Directory.GetFiles(fullExcelDir, "*.xlsx", SearchOption.TopDirectoryOnly);
 
-        if (xlsxFiles.Length == 0)
+        // 过滤 Excel 临时/锁定文件（~$filename.xlsx、.~filename.xlsx 等）
+        var validFiles = new List<string>();
+        var skippedFiles = new List<string>();
+        foreach (string f in xlsxFiles)
         {
-            Debug.LogWarning($"[ExcelToJson] {EXCEL_DIR} 下没有找到 .xlsx 文件。");
+            string name = Path.GetFileName(f);
+            if (name.StartsWith("~$") || name.StartsWith(".~") || name.StartsWith("~"))
+            {
+                skippedFiles.Add(name);
+                continue;
+            }
+            validFiles.Add(f);
+        }
+
+        if (skippedFiles.Count > 0)
+        {
+            Debug.Log($"[ExcelToJson] ⏭ 跳过 {skippedFiles.Count} 个 Excel 临时文件: {string.Join(", ", skippedFiles)}");
+        }
+
+        if (validFiles.Count == 0)
+        {
+            Debug.LogWarning($"[ExcelToJson] {EXCEL_DIR} 下没有找到有效的 .xlsx 文件。");
             return;
         }
 
@@ -73,12 +92,29 @@ public static class ExcelToJsonConverter
         int totalRows = 0;
         var summaryBuilder = new StringBuilder();
 
-        foreach (string xlsxPath in xlsxFiles)
+        foreach (string xlsxPath in validFiles)
         {
             string fileName = Path.GetFileNameWithoutExtension(xlsxPath);
+            string tempCopyPath = null;
             try
             {
-                List<JObject> rows = ParseXlsx(xlsxPath, out var columnMapping);
+                // 尝试打开文件；若被 Excel 锁定则从临时副本读取
+                string readPath = xlsxPath;
+                try
+                {
+                    // 仅测试文件是否可读（不实际解析）
+                    using (File.OpenRead(xlsxPath)) { }
+                }
+                catch (IOException)
+                {
+                    // 文件被占用（Excel 已打开此表格），复制到临时目录后读取
+                    Debug.Log($"[ExcelToJson] ⚡ {fileName}.xlsx 正在被其他程序使用，从副本读取...");
+                    tempCopyPath = Path.Combine(Path.GetTempPath(), $"excel_temp_{Guid.NewGuid():N}.xlsx");
+                    File.Copy(xlsxPath, tempCopyPath, true);
+                    readPath = tempCopyPath;
+                }
+
+                List<JObject> rows = ParseXlsx(readPath, out var columnMapping);
                 if (rows.Count == 0)
                 {
                     Debug.LogWarning($"[ExcelToJson] {fileName}.xlsx 没有数据行（第3行起）。");
@@ -97,6 +133,14 @@ public static class ExcelToJsonConverter
             catch (Exception ex)
             {
                 Debug.LogError($"[ExcelToJson] ✗ 转换 {fileName}.xlsx 时出错: {ex.Message}");
+            }
+            finally
+            {
+                // 清理临时副本
+                if (tempCopyPath != null)
+                {
+                    try { File.Delete(tempCopyPath); } catch { /* 忽略清理错误 */ }
+                }
             }
         }
 

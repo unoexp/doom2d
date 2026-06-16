@@ -108,7 +108,11 @@ public class AppMain : MonoBehaviour
             NewState = GameState.GamePlay
         });
 
+        // 打开主窗口
+        ServiceLocator.Get<WindowManager>().OpenWindow("main_window");
+
         Debug.Log("[AppMain] ========== 初始化完成，游戏开始 ==========");
+
     }
 
     private void OnDestroy()
