@@ -199,6 +199,24 @@ public class WindowManager : MonoSingleton<WindowManager>
         var go = Instantiate(prefab, WindowContainer);
         go.name = windowId;
 
+        // 设置窗口根 RectTransform 为撑满父容器四边
+        var goRt = go.GetComponent<RectTransform>();
+        if (goRt != null)
+        {
+            goRt.anchorMin = Vector2.zero;
+            goRt.anchorMax = Vector2.one;
+            goRt.offsetMin = Vector2.zero;
+            goRt.offsetMax = Vector2.zero;
+        }
+
+        // 确保窗口 Canvas 为 Overlay 模式（适配 GuiCanvas 层级）
+        var goCanvas = go.GetComponent<Canvas>();
+        if (goCanvas != null)
+        {
+            goCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            goCanvas.overrideSorting = true;
+        }
+
         // 通过窗口类名解析具体 Type，动态挂载窗口组件
         if (!TryResolveWindowType(config.WindowClass, out var windowType))
         {

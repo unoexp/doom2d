@@ -10,6 +10,16 @@
 public static class GameConst
 {
     // ══════════════════════════════════════════════════════
+    // 场景
+    // ══════════════════════════════════════════════════════
+
+    /// <summary>启动主场景（入口场景，包含 AppMain）</summary>
+    public const string SCENE_MAIN = "MainGameScene";
+
+    /// <summary>UI 场景（Additive 加载，包含 EventSystem 和 WindowContainer）</summary>
+    public const string SCENE_GUI = "Gui";
+
+    // ══════════════════════════════════════════════════════
     // 背包
     // ══════════════════════════════════════════════════════
 

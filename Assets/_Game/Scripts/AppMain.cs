@@ -17,6 +17,8 @@
 // ══════════════════════════════════════════════════════════════════════
 using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 /// <summary>
 /// 游戏唯一入口点。场景中仅需此脚本，所有后端系统由代码创建。
@@ -69,6 +71,70 @@ public class AppMain : MonoBehaviour
     private IEnumerator BootstrapCoroutine()
     {
         Application.targetFrameRate = 60;
+
+        // ── Phase 0: Additive 加载 UI 场景 ──
+        Debug.Log("[AppMain] ── 加载 UI 场景 ──");
+        yield return SceneManager.LoadSceneAsync(GameConst.SCENE_GUI, LoadSceneMode.Additive);
+
+        var guiScene = SceneManager.GetSceneByName(GameConst.SCENE_GUI);
+        if (guiScene.isLoaded)
+        {
+            // 禁用主场景的临时摄像机
+            var mainCamera = Camera.main;
+            if (mainCamera != null)
+            {
+                mainCamera.gameObject.SetActive(false);
+                Debug.Log("[AppMain] 主场景摄像机已禁用");
+            }
+
+            // 创建 UICamera（正交，渲染 UI 层）
+            var uiCameraGo = new GameObject("UICamera");
+            SceneManager.MoveGameObjectToScene(uiCameraGo, guiScene);
+            var uiCamera = uiCameraGo.AddComponent<Camera>();
+            uiCamera.orthographic = true;
+            uiCamera.orthographicSize = 5.4f;           // 1080/2/100 PPU
+            uiCamera.clearFlags = CameraClearFlags.SolidColor;
+            uiCamera.backgroundColor = Color.black;
+            uiCamera.depth = 0;
+            uiCamera.cullingMask = -1;  // Everything
+            uiCamera.transform.position = new Vector3(0, 0, -100);
+            Debug.Log("[AppMain] UICamera 已创建于 Gui 场景");
+
+            // 创建 GuiCanvas（Screen Space - Camera）
+            var canvasGo = new GameObject("GuiCanvas");
+            SceneManager.MoveGameObjectToScene(canvasGo, guiScene);
+            var canvas = canvasGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.worldCamera = uiCamera;
+            canvas.planeDistance = 100;
+            var scaler = canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920, 1080);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            canvasGo.AddComponent<GraphicRaycaster>();
+
+            // 创建 WindowContainer（挂载于 Canvas 下，锚定四边填满画布）
+            var windowContainerGo = new GameObject("WindowContainer");
+            windowContainerGo.transform.SetParent(canvasGo.transform, false);
+            var wcRt = windowContainerGo.AddComponent<RectTransform>();
+            wcRt.anchorMin = Vector2.zero;
+            wcRt.anchorMax = Vector2.one;
+            wcRt.offsetMin = Vector2.zero;
+            wcRt.offsetMax = Vector2.zero;
+            ServiceLocator.Get<WindowManager>().WindowContainer = windowContainerGo.transform;
+            Debug.Log("[AppMain] WindowContainer 已创建于 GuiCanvas 下");
+
+            // 确保 EventSystem 存在（UGUI 交互必需）
+            if (UnityEngine.EventSystems.EventSystem.current == null)
+            {
+                var eventSystemGo = new GameObject("EventSystem");
+                SceneManager.MoveGameObjectToScene(eventSystemGo, guiScene);
+                eventSystemGo.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                eventSystemGo.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
+                Debug.Log("[AppMain] EventSystem 已创建于 Gui 场景");
+            }
+        }
+
         Debug.Log("[AppMain] ── 开始数据加载阶段 ──");
 
         // Phase 1: 创建 DataLoaderSystem 并等待基础设施 JSON 数据加载
