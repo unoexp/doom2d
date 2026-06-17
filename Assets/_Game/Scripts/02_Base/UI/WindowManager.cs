@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════
-// 📁 Assets/_Game/05_Show/UI/WindowManager.cs
+// 📁 Assets/_Game/02_Base/UI/WindowManager.cs
 // 窗口管理器。管理所有独立窗口（UIWindow）的打开、关闭、焦点和生命周期。
 // ─────────────────────────────────────────────────────────────────────
 // 职责：
@@ -10,7 +10,6 @@
 //
 // 设计说明：
 //   · 继承 MonoSingleton，全局唯一，同时注册到 ServiceLocator
-//   · 与 UIManager 完全独立 — UIManager 管栈式面板，WindowManager 管独立窗口
 //   · UIWindow 为纯 C# 类（不继承 MonoBehaviour），由 WindowManager 管理生命周期
 //   · 窗口预制体从 Resources 目录加载（通过 ResourceManager）
 //   · 动画参数从配置表查询后传入 UIWindow

@@ -1,4 +1,4 @@
-// 📁 02_Infrastructure/ServiceLocator/ServiceLocator.cs
+// 📁 Assets/_Game/02_Base/ServiceLocator/ServiceLocator.cs
 using System;
 using System.Collections.Generic;
 using UnityEngine;

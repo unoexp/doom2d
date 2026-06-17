@@ -218,9 +218,6 @@ public class AppMain : MonoBehaviour
         // AudioManager（数据依赖配置在 BootstrapCoroutine 中注入）
         CreateMonoSingleton<AudioManager>("AudioManager", null);
 
-        // UIManager（无配置）
-        CreateMonoSingleton<UIManager>("UIManager", null);
-
         // VFXManager（特效目录从 JSON 加载，无配置回调）
         CreateMonoSingleton<VFXManager>("VFXManager", null);
 
@@ -293,7 +290,6 @@ public class AppMain : MonoBehaviour
         registered += CheckAndLog<ResourceManager>("ResourceManager", ref total);
         registered += CheckAndLog<ObjectPoolManager>("ObjectPoolManager", ref total);
         registered += CheckAndLog<AudioManager>("AudioManager", ref total);
-        registered += CheckAndLog<UIManager>("UIManager", ref total);
         registered += CheckAndLog<VFXManager>("VFXManager", ref total);
         registered += CheckAndLog<WindowManager>("WindowManager", ref total);
 

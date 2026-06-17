@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════
-// 📁 Assets/_Game/05_Show/UI/_Base/UIPanel.cs
+// 📁 Assets/_Game/02_Base/UI/UIPanel.cs
 // 所有UI面板的基类。提供显示/隐藏、生命周期回调。
 // ══════════════════════════════════════════════════════════════════════
 using UnityEngine;
@@ -13,8 +13,8 @@ using UnityEngine;
 ///   · 面板生命周期回调（OnShow/OnHide/OnFocusGained/OnFocusLost）
 ///
 /// 设计说明：
-///   · 所有UI面板继承此基类，确保 UIManager 可统一管理
-///   · 面板默认关闭，由 UIManager.OpenPanel 打开
+///   · 所有场景预置面板继承此基类，与 UIWindow（动态加载窗口）共存
+///   · 面板默认隐藏（Awake 中自动设置），由 Presenter 通过 Show/Hide 直接控制
 ///   · 不包含业务逻辑，仅管理面板自身的显示状态
 /// </summary>
 [RequireComponent(typeof(CanvasGroup))]
