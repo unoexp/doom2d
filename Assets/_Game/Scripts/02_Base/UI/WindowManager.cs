@@ -72,6 +72,7 @@ public class WindowManager : MonoSingleton<WindowManager>
         = new Dictionary<string, System.Type>
         {
             { "MainWindow", typeof(MainWindow) },
+            { "LoadingWindow", typeof(LoadingWindow) },
         };
 
     // ══════════════════════════════════════════════════════
@@ -90,12 +91,21 @@ public class WindowManager : MonoSingleton<WindowManager>
         InitSingleton();
         BuildConfigMap();
 
-        // 确保有挂载容器（在 Canvas 下创建 WindowContainer）
+        // 优先使用 Gui 场景中预置的 WindowContainer（避免窗口挂载到 DontDestroyOnLoad）
         if (WindowContainer == null)
         {
-            var go = new GameObject("WindowContainer");
-            go.transform.SetParent(transform);
-            WindowContainer = go.transform;
+            var existing = GameObject.Find("WindowContainer");
+            if (existing != null)
+            {
+                WindowContainer = existing.transform;
+            }
+            else
+            {
+                var go = new GameObject("WindowContainer");
+                go.transform.SetParent(transform);
+                WindowContainer = go.transform;
+                Debug.LogWarning("[WindowManager] Gui 场景中未找到 WindowContainer，已在 DontDestroyOnLoad 下创建降级容器");
+            }
         }
 
         Debug.Log($"[WindowManager] 初始化完成，共 {_configMap.Count} 个窗口配置");
@@ -173,6 +183,7 @@ public class WindowManager : MonoSingleton<WindowManager>
     /// <param name="windowId">窗口ID（对应 windows.json 中的 windowId）</param>
     public void OpenWindow(string windowId)
     {
+        Debug.Log($"[WindowManager] 请求打开窗口: {windowId}");
         if (string.IsNullOrEmpty(windowId))
         {
             Debug.LogWarning("[WindowManager] OpenWindow: windowId 为空");
@@ -191,7 +202,8 @@ public class WindowManager : MonoSingleton<WindowManager>
         }
 
         // 加载预制体
-        var prefab = ResourceManager.Instance.Load<GameObject>(config.PrefabPath);
+        var resourcePath = "Prefabs/Windows/" + config.PrefabPath;
+        var prefab = ResourceManager.Instance.Load<GameObject>(resourcePath);
         if (prefab == null)
         {
             Debug.LogError($"[WindowManager] 无法加载窗口预制体: {config.PrefabPath} (windowId={windowId})");
@@ -211,12 +223,17 @@ public class WindowManager : MonoSingleton<WindowManager>
             goRt.offsetMax = Vector2.zero;
         }
 
-        // 确保窗口 Canvas 为 Overlay 模式（适配 GuiCanvas 层级）
+        // 确保窗口 Canvas 为 Overlay 模式，并具备 GraphicRaycaster 以接收输入事件
         var goCanvas = go.GetComponent<Canvas>();
         if (goCanvas != null)
         {
             goCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
             goCanvas.overrideSorting = true;
+
+            if (go.GetComponent<UnityEngine.UI.GraphicRaycaster>() == null)
+            {
+                go.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+            }
         }
 
         // 通过窗口类名解析具体 Type，构造纯 C# 窗口实例
@@ -302,6 +319,24 @@ public class WindowManager : MonoSingleton<WindowManager>
         }
 
         EventBus.Publish(new AllWindowsClosedEvent());
+    }
+
+    /// <summary>
+    /// 获取已打开窗口的实例。
+    /// </summary>
+    /// <param name="windowId">窗口ID</param>
+    /// <param name="window">窗口实例</param>
+    /// <typeparam name="T">窗口具体类型</typeparam>
+    /// <returns>是否找到</returns>
+    public bool TryGetWindow<T>(string windowId, out T window) where T : UIWindow
+    {
+        if (_openWindows.TryGetValue(windowId, out var w) && w is T typed)
+        {
+            window = typed;
+            return true;
+        }
+        window = null;
+        return false;
     }
 
     /// <summary>销毁窗口实例（不含动画）</summary>
@@ -403,7 +438,7 @@ public class WindowManager : MonoSingleton<WindowManager>
     {
         if (!_configMap.TryGetValue(windowId, out config))
         {
-            Debug.LogWarning($"[WindowManager] 未找到窗口配置: {windowId}");
+            Debug.LogError($"[WindowManager] 未找到窗口配置: {windowId}");
             return false;
         }
         return true;
@@ -436,13 +471,6 @@ public class WindowManager : MonoSingleton<WindowManager>
     /// <returns>是否解析成功</returns>
     private static bool TryResolveWindowType(string windowClass, out System.Type type)
     {
-        if (string.IsNullOrEmpty(windowClass))
-        {
-            Debug.LogWarning("[WindowManager] windowClass 为空，无法解析窗口类型");
-            type = null;
-            return false;
-        }
-
         if (WindowClassRegistry.TryGetValue(windowClass, out type))
             return true;
 

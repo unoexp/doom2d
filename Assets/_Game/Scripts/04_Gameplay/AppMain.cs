@@ -7,30 +7,16 @@
 //   2. 在 Start 协程中加载 JSON 数据并创建 Core 系统
 //   3. 验证所有系统注册状态
 //   4. 在 OnDestroy 中逆序关闭所有系统
-//
-// 💡 骨架版本仅包含基础设施，游戏具体系统（背包/制作/战斗等）已移除。
 //    重新实现游戏系统时在此文件中添加对应的 CreateSystem 调用。
-//
-// 使用方式：
-//   · 在场景中创建一个 GameObject，挂载 AppMain 脚本
-//   · Script Execution Order 设为 -100（确保最先执行）
 // ══════════════════════════════════════════════════════════════════════
+using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-/// <summary>
-/// 游戏唯一入口点。场景中仅需此脚本，所有后端系统由代码创建。
-/// </summary>
 public class AppMain : MonoBehaviour
 {
-    // ══════════════════════════════════════════════════════
-    // 配置
-    // ══════════════════════════════════════════════════════
-    // 💡 骨架版本所有配置均走 JSON 配表（DataLoaderSystem），
-    //    AppMain Inspector 无需配置任何字段。
-
     // ══════════════════════════════════════════════════════
     // 运行时
     // ══════════════════════════════════════════════════════
@@ -50,7 +36,7 @@ public class AppMain : MonoBehaviour
     private void Awake()
     {
         if (_initialized) return;
-
+        AppCore.Instance.targetFrameRate = 60;
         DontDestroyOnLoad(gameObject);
 
         // 创建子系统根节点（所有代码创建的系统挂载在此下）
@@ -58,8 +44,6 @@ public class AppMain : MonoBehaviour
         _systemsRoot.SetParent(transform);
         _singletonsRoot = new GameObject("_Singletons").transform;
         _singletonsRoot.SetParent(transform);
-
-        // Awake 中只创建无数据依赖的 Base 系统
         CreateBaseSystems();
 
         // 启动协程：等待数据加载 → 创建业务系统 → 创建玩法系统
@@ -70,80 +54,50 @@ public class AppMain : MonoBehaviour
 
     private IEnumerator BootstrapCoroutine()
     {
-        Application.targetFrameRate = 60;
 
-        // ── Phase 0: Additive 加载 UI 场景 ──
+        // ════════════════════════════════════════════════════
+        // Phase 0: Additive 加载 UI 场景
+        // ════════════════════════════════════════════════════
         Debug.Log("[AppMain] ── 加载 UI 场景 ──");
         yield return SceneManager.LoadSceneAsync(GameConst.SCENE_GUI, LoadSceneMode.Additive);
 
-        var guiScene = SceneManager.GetSceneByName(GameConst.SCENE_GUI);
-        if (guiScene.isLoaded)
+        // ════════════════════════════════════════════════════
+        // Phase 1: 创建 DataLoaderSystem，优先加载窗口配置
+        // ════════════════════════════════════════════════════
+        Debug.Log("[AppMain] ── 创建 DataLoaderSystem ──");
+        _dataLoader = CreateSystem<DataLoaderSystem>("DataLoaderSystem");
+
+        // 1a. 优先加载 windows.json（WindowManager 初始化所需）
+        yield return _dataLoader.LoadWindowConfigFirstAsync();
+
+        Debug.Log("[AppMain] ── 窗口配置已加载，初始化 WindowManager ──");
+
+        // 1b. 注入窗口配置到 WindowManager 并初始化
         {
-            // 禁用主场景的临时摄像机
-            var mainCamera = Camera.main;
-            if (mainCamera != null)
-            {
-                mainCamera.gameObject.SetActive(false);
-                Debug.Log("[AppMain] 主场景摄像机已禁用");
-            }
-
-            // 创建 UICamera（正交，渲染 UI 层）
-            var uiCameraGo = new GameObject("UICamera");
-            SceneManager.MoveGameObjectToScene(uiCameraGo, guiScene);
-            var uiCamera = uiCameraGo.AddComponent<Camera>();
-            uiCamera.orthographic = true;
-            uiCamera.orthographicSize = 5.4f;           // 1080/2/100 PPU
-            uiCamera.clearFlags = CameraClearFlags.SolidColor;
-            uiCamera.backgroundColor = Color.black;
-            uiCamera.depth = 0;
-            uiCamera.cullingMask = -1;  // Everything
-            uiCamera.transform.position = new Vector3(0, 0, -100);
-            Debug.Log("[AppMain] UICamera 已创建于 Gui 场景");
-
-            // 创建 GuiCanvas（Screen Space - Camera）
-            var canvasGo = new GameObject("GuiCanvas");
-            SceneManager.MoveGameObjectToScene(canvasGo, guiScene);
-            var canvas = canvasGo.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceCamera;
-            canvas.worldCamera = uiCamera;
-            canvas.planeDistance = 100;
-            var scaler = canvasGo.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            canvasGo.AddComponent<GraphicRaycaster>();
-
-            // 创建 WindowContainer（挂载于 Canvas 下，锚定四边填满画布）
-            var windowContainerGo = new GameObject("WindowContainer");
-            windowContainerGo.transform.SetParent(canvasGo.transform, false);
-            var wcRt = windowContainerGo.AddComponent<RectTransform>();
-            wcRt.anchorMin = Vector2.zero;
-            wcRt.anchorMax = Vector2.one;
-            wcRt.offsetMin = Vector2.zero;
-            wcRt.offsetMax = Vector2.zero;
-            ServiceLocator.Get<WindowManager>().WindowContainer = windowContainerGo.transform;
-            Debug.Log("[AppMain] WindowContainer 已创建于 GuiCanvas 下");
-
-            // 确保 EventSystem 存在（UGUI 交互必需）
-            if (UnityEngine.EventSystems.EventSystem.current == null)
-            {
-                var eventSystemGo = new GameObject("EventSystem");
-                SceneManager.MoveGameObjectToScene(eventSystemGo, guiScene);
-                eventSystemGo.AddComponent<UnityEngine.EventSystems.EventSystem>();
-                eventSystemGo.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
-                Debug.Log("[AppMain] EventSystem 已创建于 Gui 场景");
-            }
+            var wm = ServiceLocator.Get<WindowManager>();
+            wm.ConfigService = ServiceLocator.Get<IWindowConfigDataService>();
+            wm.Initialize();
         }
 
-        Debug.Log("[AppMain] ── 开始数据加载阶段 ──");
+        // ════════════════════════════════════════════════════
+        // Phase 2: 打开 LoadingWindow（游戏首个可见窗口）
+        // ════════════════════════════════════════════════════
+        Debug.Log("[AppMain] ── 打开加载窗口 ──");
+        var wmRef = ServiceLocator.Get<WindowManager>();
+        wmRef.OpenWindow("loading_window");
 
-        // Phase 1: 创建 DataLoaderSystem 并等待基础设施 JSON 数据加载
-        _dataLoader = CreateSystem<DataLoaderSystem>("DataLoaderSystem");
-        yield return _dataLoader.LoadAllDataAsync();
+        // 广播加载开始
+        EventBus.Publish(new LoadingStartedEvent { HintText = "正在加载游戏数据..." });
+
+        // ════════════════════════════════════════════════════
+        // Phase 3: 加载其余 JSON 数据（沿途发布 LoadingProgressEvent）
+        // ════════════════════════════════════════════════════
+        Debug.Log("[AppMain] ── 开始加载游戏数据 ──");
+        yield return _dataLoader.LoadRemainingWithProgressAsync();
 
         Debug.Log("[AppMain] ── 数据加载完成，注入配置到 Base 系统 ──");
 
-        // Phase 2: 注入数据依赖配置到 MonoSingletons
+        // 注入其余配置到 MonoSingletons
         {
             var rm = ServiceLocator.Get<ResourceManager>();
             rm.CacheConfig = ServiceLocator.Get<IResourceCacheConfigDataService>().GetConfig();
@@ -152,20 +106,22 @@ public class AppMain : MonoBehaviour
             var am = ServiceLocator.Get<AudioManager>();
             am.Catalogs = new[] { ServiceLocator.Get<IAudioCatalogDataService>().GetCatalog() };
             am.Initialize();
-
-            var wm = ServiceLocator.Get<WindowManager>();
-            wm.ConfigService = ServiceLocator.Get<IWindowConfigDataService>();
-            wm.Initialize();
         }
 
+        // ════════════════════════════════════════════════════
+        // Phase 4: 创建 Core 业务系统
+        // ════════════════════════════════════════════════════
         Debug.Log("[AppMain] ── 创建业务系统 ──");
-
-        // Phase 3: 创建 Core 业务系统（骨架版本：仅 SaveLoadSystem）
         CreateCoreSystems();
 
         Debug.Log("[AppMain] ========== 所有系统创建完毕 ==========");
 
         ValidateAllSystems();
+
+        // ════════════════════════════════════════════════════
+        // Phase 5: 广播加载完成 → LoadingWindow 自动关闭并回调 main_window
+        // ════════════════════════════════════════════════════
+        EventBus.Publish(new LoadingCompletedEvent());
 
         // 广播游戏就绪
         EventBus.Publish(new GameStateChangedEvent
@@ -173,9 +129,6 @@ public class AppMain : MonoBehaviour
             PreviousState = GameState.Loading,
             NewState = GameState.GamePlay
         });
-
-        // 打开主窗口
-        ServiceLocator.Get<WindowManager>().OpenWindow("main_window");
 
         Debug.Log("[AppMain] ========== 初始化完成，游戏开始 ==========");
 
@@ -203,26 +156,14 @@ public class AppMain : MonoBehaviour
     {
         Debug.Log("[AppMain] ── 创建 Base 系统 ──");
 
-        // GameStateManager（无配置）
         CreateMonoSingleton<GameStateManager>("GameStateManager", null);
-
-        // TimerSystem（无配置）
         CreateMonoSingleton<TimerSystem>("TimerSystem", null);
-
-        // ObjectPoolManager（无配置）
         CreateMonoSingleton<ObjectPoolManager>("ObjectPoolManager", null);
-
-        // ResourceManager（数据依赖配置在 BootstrapCoroutine 中注入）
         CreateMonoSingleton<ResourceManager>("ResourceManager", null);
-
-        // AudioManager（数据依赖配置在 BootstrapCoroutine 中注入）
         CreateMonoSingleton<AudioManager>("AudioManager", null);
-
-        // VFXManager（特效目录从 JSON 加载，无配置回调）
         CreateMonoSingleton<VFXManager>("VFXManager", null);
-
-        // WindowManager（窗口配置在 BootstrapCoroutine 中注入）
         CreateMonoSingleton<WindowManager>("WindowManager", null);
+        CreateMonoSingleton<SceneLoadSystem>("SceneLoadSystem", null);
     }
 
     // ── 03_Core：业务系统（骨架版本：仅 SaveLoadSystem）──
@@ -231,7 +172,6 @@ public class AppMain : MonoBehaviour
     {
         Debug.Log("[AppMain] ── 创建 Core 系统 ──");
 
-        // SaveLoadSystem（无配置）
         CreateSystem<SaveLoadSystem>("SaveLoadSystem");
     }
 
@@ -292,6 +232,7 @@ public class AppMain : MonoBehaviour
         registered += CheckAndLog<AudioManager>("AudioManager", ref total);
         registered += CheckAndLog<VFXManager>("VFXManager", ref total);
         registered += CheckAndLog<WindowManager>("WindowManager", ref total);
+        registered += CheckAndLog<SceneLoadSystem>("SceneLoadSystem", ref total);
 
         Debug.Log("[AppMain] ── Data Services ──");
         registered += CheckAndLog<IResourceCacheConfigDataService>("IResourceCacheConfigDataService", ref total);

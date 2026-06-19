@@ -127,6 +127,10 @@ public static class UIAnimationHelper
         RectTransform rectTransform, WindowAnimationType type, float duration,
         Action onComplete = null)
     {
+        // 恢复交互状态（SetVisualClosed 已将 interactable/blocksRaycasts 置为 false）
+        canvasGroup.interactable = true;
+        canvasGroup.blocksRaycasts = true;
+
         switch (type)
         {
             case WindowAnimationType.None:

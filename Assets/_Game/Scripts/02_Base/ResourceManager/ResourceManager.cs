@@ -84,7 +84,8 @@ public partial class ResourceManager : MonoSingleton<ResourceManager>,
     protected override void OnInitialize()
     {
         RegisterServices();
-        Log("[ResourceManager] 单例初始化完成（ServiceLocator 已注册）");
+        InitializeCache();
+        Log("[ResourceManager] 单例初始化完成（ServiceLocator 已注册，缓存已就绪）");
     }
 
     /// <summary>配置注入后的完整初始化（ISystem）</summary>
@@ -172,8 +173,8 @@ public partial class ResourceManager : MonoSingleton<ResourceManager>,
         // 发布加载开始事件
         PublishLoadStarted(path, LoadType.Sync, requestId);
 
-        try
-        {
+        // try
+        // {/
             // 1. 检查缓存
             if (_resourceCache.TryGet<T>(path, out var cachedResource))
             {
@@ -202,17 +203,17 @@ public partial class ResourceManager : MonoSingleton<ResourceManager>,
             PublishLoadCompleted(path, false, requestId);
 
             return resource;
-        }
-        catch (Exception ex)
-        {
-            // 发布加载失败事件
-            var errorType = ex is ResourceLoadException rle ?
-                rle.ErrorType : LoadErrorType.Unknown;
-            PublishLoadFailed(path, errorType, ex.Message, requestId);
+        // }
+        // catch (Exception ex)
+        // {
+        //     // 发布加载失败事件
+        //     var errorType = ex is ResourceLoadException rle ?
+        //         rle.ErrorType : LoadErrorType.Unknown;
+        //     PublishLoadFailed(path, errorType, ex.Message, requestId);
 
-            LogError($"[ResourceManager] 加载失败: {path} - {ex.Message}");
-            throw;
-        }
+        //     LogError($"[ResourceManager] 加载失败: {path} - {ex.Message}");
+        //     throw;
+        // }
     }
 
     /// <summary>

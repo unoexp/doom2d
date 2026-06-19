@@ -14,10 +14,26 @@ public static class GameConst
     // ══════════════════════════════════════════════════════
 
     /// <summary>启动主场景（入口场景，包含 AppMain）</summary>
-    public const string SCENE_MAIN = "MainGameScene";
+    public const string SCENE_MAIN = "Main";
 
     /// <summary>UI 场景（Additive 加载，包含 EventSystem 和 WindowContainer）</summary>
     public const string SCENE_GUI = "Gui";
+
+    /// <summary>主菜单场景</summary>
+    public const string SCENE_MAIN_MENU = "MainMenu";
+
+    /// <summary>游戏主场景</summary>
+    public const string SCENE_GAMEPLAY = "Gameplay";
+
+    /// <summary>
+    /// 持久场景名称集合（始终保留，不会被 SceneLoadSystem 卸载）。
+    /// 使用 HashSet 提供 O(1) 查询。
+    /// </summary>
+    public static readonly System.Collections.Generic.HashSet<string> PERSISTENT_SCENES
+        = new System.Collections.Generic.HashSet<string>
+        {
+            SCENE_GUI
+        };
 
     // ══════════════════════════════════════════════════════
     // 背包

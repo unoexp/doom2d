@@ -14,12 +14,23 @@
     [
       "main_window",
       "MainWindow",
-      "Prefabs/Windows/main_window",
+      "main_window",
       "FadeIn",
       0.35,
       "FadeOut",
       0.2,
       50,
+      null
+    ],
+    [
+      "loading_window",
+      "LoadingWindow",
+      "loading_window",
+      null,
+      null,
+      null,
+      null,
+      null,
       null
     ]
   ]
