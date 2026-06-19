@@ -69,7 +69,7 @@ public class LoadingWindow : UIWindow
             _btnStart = btnStartTransform.GetComponent<Button>();
             _btnStart.onClick.AddListener(() =>
             {
-                OnLoadingComplete?.Invoke();
+                OnClickStart();
             });
         }
     }
