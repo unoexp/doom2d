@@ -11,26 +11,26 @@ using Newtonsoft.Json.Converters;
 [JsonObject(MemberSerialization.OptIn)]
 public class ItemData
 {
-    [JsonProperty("itemId")]
-    public string ItemId;
+    [JsonProperty("item_id")]
+    public string ItemID;
 
-    [JsonProperty("displayName")]
+    [JsonProperty("name")]
     public string DisplayName;
 
-    [JsonProperty("description")]
+    [JsonProperty("desc")]
     public string Description;
 
-    [JsonProperty("iconPath")]
+    [JsonProperty("icon")]
     public string IconPath;
 
-    [JsonProperty("worldPrefabPath")]
+    [JsonProperty("prefab")]
     public string WorldPrefabPath;
 
     [JsonProperty("category")]
     [JsonConverter(typeof(StringEnumConverter))]
     public ItemCategory Category = ItemCategory.General;
 
-    [JsonProperty("maxStackSize")]
+    [JsonProperty("max_stack_size")]
     public int MaxStackSize = 1;
 
     [JsonProperty("weight")]
@@ -39,19 +39,4 @@ public class ItemData
     [JsonProperty("rarity")]
     [JsonConverter(typeof(StringEnumConverter))]
     public ItemRarity Rarity = ItemRarity.Common;
-
-    [JsonProperty("hasDurability")]
-    public bool HasDurability = false;
-
-    [JsonProperty("maxDurability")]
-    public float MaxDurability = 100f;
-
-    [JsonProperty("durabilityConsumptionPerUse")]
-    public float DurabilityConsumptionPerUse = 1f;
-
-    [JsonProperty("destroyOnZeroDurability")]
-    public bool DestroyOnZeroDurability = true;
-
-    [JsonProperty("isPickupable")]
-    public bool IsPickupable = true;
 }

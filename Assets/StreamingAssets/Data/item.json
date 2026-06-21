@@ -1,0 +1,37 @@
+﻿{
+  "columns": [
+    "itemId",
+    "name",
+    "desc",
+    "icon",
+    "prefab",
+    "category",
+    "maxStackSize",
+    "weight",
+    "rarity"
+  ],
+  "rows": [
+    [
+      100001,
+      "新手木剑",
+      null,
+      null,
+      null,
+      1,
+      1,
+      1,
+      1
+    ],
+    [
+      100002,
+      "新手布衣",
+      null,
+      null,
+      null,
+      1,
+      1,
+      1,
+      1
+    ]
+  ]
+}

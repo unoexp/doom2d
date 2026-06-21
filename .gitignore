@@ -12,3 +12,5 @@ __pycache__
 
 .codegraph
 .claude
+.codex
+AGENTS.md
