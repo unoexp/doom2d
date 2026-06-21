@@ -239,6 +239,7 @@ public class AppMain : MonoBehaviour
         registered += CheckAndLog<IAudioCatalogDataService>("IAudioCatalogDataService", ref total);
         registered += CheckAndLog<IVFXCataLogDataService>("IVFXCataLogDataService", ref total);
         registered += CheckAndLog<IWindowConfigDataService>("IWindowConfigDataService", ref total);
+        registered += CheckAndLog<IItemDataService>("IItemDataService", ref total);
 
         Debug.Log("[AppMain] ── Core Systems ──");
         registered += CheckAndLog<SaveLoadSystem>("SaveLoadSystem", ref total);

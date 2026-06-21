@@ -29,3 +29,11 @@ public interface IWindowConfigDataService
     WindowConfigEntryData GetByWindowId(string windowId);
     bool TryGetByWindowId(string windowId, out WindowConfigEntryData data);
 }
+
+/// <summary>物品数据服务接口</summary>
+public interface IItemDataService
+{
+    System.Collections.Generic.IReadOnlyList<ItemData> GetAllItems();
+    ItemData GetByItemId(int itemId);
+    bool TryGetByItemId(int itemId, out ItemData data);
+}

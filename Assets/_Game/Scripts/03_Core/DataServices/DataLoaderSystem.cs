@@ -151,6 +151,7 @@ public class DataLoaderSystem : MonoBehaviour, ISystem
 
         // ── 窗口配置 ──
         CreateAndAdd<WindowConfigDataService>("WindowConfigDataService");
+        CreateAndAdd<ItemDataService>("ItemDataService");
     }
 
     /// <summary>创建单个数据服务 GameObject 并加入列表</summary>
