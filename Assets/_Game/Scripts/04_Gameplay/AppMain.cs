@@ -83,8 +83,7 @@ public class AppMain : MonoBehaviour
         // Phase 2: 打开 LoadingWindow（游戏首个可见窗口）
         // ════════════════════════════════════════════════════
         Debug.Log("[AppMain] ── 打开加载窗口 ──");
-        var wmRef = ServiceLocator.Get<WindowManager>();
-        wmRef.OpenWindow("loading_window");
+        Utils.OpenWindow("loading_window");
 
         // 广播加载开始
         EventBus.Publish(new LoadingStartedEvent { HintText = "正在加载游戏数据..." });

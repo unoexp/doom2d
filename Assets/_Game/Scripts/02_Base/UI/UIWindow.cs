@@ -53,9 +53,9 @@ public abstract class UIWindow
         Root = root ?? throw new ArgumentNullException(nameof(root));
         WindowId = string.IsNullOrEmpty(windowId) ? GetType().Name : windowId;
 
-        _canvasGroup = root.GetComponent<CanvasGroup>();
-        _rectTransform = root.GetComponent<RectTransform>();
-        _canvas = root.GetComponent<Canvas>();
+        _canvasGroup = root.GetOrAddComponent<CanvasGroup>();
+        _rectTransform = root.GetOrAddComponent<RectTransform>();
+        _canvas = root.GetOrAddComponent<Canvas>();
 
         if (_canvas == null)
         {
@@ -66,7 +66,7 @@ public abstract class UIWindow
         {
             _canvas.overrideSorting = true;
         }
-
+        InitUIComponents();
         // 初始状态：隐藏（通过 CanvasGroup 控制，不关闭 GameObject 以支持 DOTween）
         SetVisualClosed();
     }
@@ -144,6 +144,11 @@ public abstract class UIWindow
         {
             wm.FocusWindow(this);
         }
+    }
+
+    public virtual void InitUIComponents()
+    {
+        // 子类可重写此方法在构造函数中调用以获取 UI 组件引用
     }
 
     // ══════════════════════════════════════════════════════

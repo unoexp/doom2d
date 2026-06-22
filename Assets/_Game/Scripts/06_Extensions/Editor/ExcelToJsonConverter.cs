@@ -560,14 +560,12 @@ public static class ExcelToJsonConverter
         };
 
         // ── 格式化写入 ──
-        using (var writer = new StreamWriter(filePath, false, Encoding.UTF8))
-        using (var jsonWriter = new JsonTextWriter(writer))
-        {
-            jsonWriter.Formatting = Formatting.Indented;
-            jsonWriter.Indentation = 2;
-            jsonWriter.IndentChar = ' ';
-            output.WriteTo(jsonWriter);
-        }
+       using (var writer = new StreamWriter(filePath, false, Encoding.UTF8))
+       using (var jsonWriter = new JsonTextWriter(writer))
+       {
+           jsonWriter.Formatting = Formatting.None;
+           output.WriteTo(jsonWriter);
+       }
     }
 }
 #endif

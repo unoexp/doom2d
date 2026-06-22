@@ -3,6 +3,7 @@
 // 主窗口。游戏的核心窗口，作为其他子界面的容器。
 // ══════════════════════════════════════════════════════════════════════
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
 /// 主窗口。游戏的核心窗口，作为其他子界面的容器。
@@ -11,10 +12,12 @@ using UnityEngine;
 public class MainWindow : UIWindow
 {
     // ══════════════════════════════════════════════════════
-    // UI 控件引用
+    // UI 控件引用（自动绑定）
     // ══════════════════════════════════════════════════════
 
-    private readonly UnityEngine.UI.Image _backgroundImage;
+    [Bind("btns/btn_task")]      private Button _btnTask;
+    [Bind("btns/btn_inventory")] private Button _btnInventory;
+    [Bind("btns/btn_char")]      private Button _btnChar;
 
     // ══════════════════════════════════════════════════════
     // 构造函数
@@ -28,7 +31,45 @@ public class MainWindow : UIWindow
     /// <param name="windowId">窗口唯一标识</param>
     public MainWindow(GameObject root, string windowId) : base(root, windowId)
     {
-        _backgroundImage = Root.GetComponentInChildren<UnityEngine.UI.Image>();
+    }
+
+    // ══════════════════════════════════════════════════════
+    // UI 组件初始化
+    // ══════════════════════════════════════════════════════
+
+    public override void InitUIComponents()
+    {
+        // 自动绑定 [Bind] 标记的字段
+        Root.transform.BindComponentsOn(this);
+
+        // 绑定按钮点击回调
+        if (_btnTask != null)
+            _btnTask.onClick.AddListener(OnTaskClicked);
+
+        if (_btnInventory != null)
+            _btnInventory.onClick.AddListener(OnInventoryClicked);
+
+        if (_btnChar != null)
+            _btnChar.onClick.AddListener(OnCharClicked);
+    }
+
+    // ══════════════════════════════════════════════════════
+    // 按钮回调
+    // ══════════════════════════════════════════════════════
+
+    private void OnTaskClicked()
+    {
+        Debug.Log("[MainWindow] 任务按钮被点击");
+    }
+
+    private void OnInventoryClicked()
+    {
+        Debug.Log("[MainWindow] 背包按钮被点击");
+    }
+
+    private void OnCharClicked()
+    {
+        Debug.Log("[MainWindow] 角色按钮被点击");
     }
 
     // ══════════════════════════════════════════════════════

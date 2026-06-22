@@ -133,9 +133,9 @@ public class LoadingWindow : UIWindow
 
     private void OnClickStart()
     {
-        ServiceLocator.Get<WindowManager>().OpenWindow("main_window");
+        Utils.OpenWindow("main_window");
         ServiceLocator.Get<SceneLoadSystem>().LoadSceneAsync(GameConst.SCENE_MAIN);
-        ServiceLocator.Get<WindowManager>().CloseWindow(WindowId);
+        Utils.CloseWindow(WindowId);
     }
 
 

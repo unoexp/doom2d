@@ -67,6 +67,8 @@ public abstract class UIPanel : MonoBehaviour
     protected virtual void Awake()
     {
         _canvasGroup = GetComponent<CanvasGroup>();
+        // 自动绑定 [Bind] 标记的子节点组件
+        this.BindComponents();
         // 默认隐藏
         SetVisualState(false);
     }
