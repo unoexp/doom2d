@@ -36,7 +36,7 @@ public class AppMain : MonoBehaviour
     private void Awake()
     {
         if (_initialized) return;
-        AppCore.Instance.targetFrameRate = 60;
+        AppCore.Instance.targetFrameRate = 30;
         DontDestroyOnLoad(gameObject);
 
         // 创建子系统根节点（所有代码创建的系统挂载在此下）
